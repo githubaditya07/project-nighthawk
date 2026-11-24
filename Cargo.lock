@@ -169,7 +169,6 @@ name = "chaos-crypto"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "chrono",
  "rand 0.8.8",
  "shared",
 ]
@@ -196,7 +195,6 @@ version = "0.1.0"
 dependencies = [
  "rand 0.8.8",
  "reed-solomon-erasure",
- "shared",
  "thiserror",
 ]
 
@@ -329,7 +327,6 @@ dependencies = [
  "chrono",
  "core-codec",
  "mesh-node",
- "rand 0.8.8",
  "serde",
  "serde_json",
  "shared",
@@ -572,8 +569,6 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 name = "mesh-node"
 version = "0.1.0"
 dependencies = [
- "chaos-crypto",
- "chrono",
  "rand 0.8.8",
  "shared",
  "thiserror",
@@ -968,9 +963,7 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "serde",
- "serde_json",
 ]
 
 [[package]]

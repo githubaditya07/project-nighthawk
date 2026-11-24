@@ -5,8 +5,6 @@ edition = "2021"
 
 [dependencies]
 shared = { workspace = true }
-chaos-crypto = { workspace = true }
 tokio = { workspace = true }
 rand = { workspace = true }
-chrono = { workspace = true }
 thiserror = { workspace = true }
