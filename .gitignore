@@ -1,0 +1,7 @@
+/target
+/data
+war-room-ui/node_modules
+war-room-ui/dist
+.env
+*.bin
+*.log

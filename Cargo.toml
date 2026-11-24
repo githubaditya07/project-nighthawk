@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "shared",
+    "crates/core-codec",
+    "crates/chaos-crypto",
+    "crates/mesh-node",
+    "crates/gateway",
+]
+
+[workspace.dependencies]
+shared = { path = "shared" }
+core-codec = { path = "crates/core-codec" }
+chaos-crypto = { path = "crates/chaos-crypto" }
+mesh-node = { path = "crates/mesh-node" }
+
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1.5"
+reed-solomon-erasure = "6.0"
+thiserror = "2.0"
+rand = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["serde", "std", "alloc"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+axum = { version = "0.8", features = ["multipart", "ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

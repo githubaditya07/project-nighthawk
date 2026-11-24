@@ -1,0 +1,10 @@
+[package]
+name = "chaos-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }

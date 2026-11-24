@@ -1,0 +1,12 @@
+[package]
+name = "core-codec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared = { workspace = true }
+reed-solomon-erasure = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

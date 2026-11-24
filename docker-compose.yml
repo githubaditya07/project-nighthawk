@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  nighthawk-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nighthawk-gateway
+    ports:
+      - "8080:8080"
+      - "5173:5173"
+    environment:
+      - RUST_LOG=info
+      - NIGHTHAWK_DATA_DIR=/data
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+    depends_on:
+      - node-01
+      - node-02
+      - node-03
+      - node-04
+      - node-05
+      - node-06
+      - node-07
+      - node-08
+      - node-09
+      - node-10
+      - node-11
+      - node-12
+
+  node-01:
+    image: alpine:latest
+    container_name: nighthawk-node-01
+    command: sh -c "mkdir -p /data/node_01 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-02:
+    image: alpine:latest
+    container_name: nighthawk-node-02
+    command: sh -c "mkdir -p /data/node_02 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-03:
+    image: alpine:latest
+    container_name: nighthawk-node-03
+    command: sh -c "mkdir -p /data/node_03 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-04:
+    image: alpine:latest
+    container_name: nighthawk-node-04
+    command: sh -c "mkdir -p /data/node_04 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-05:
+    image: alpine:latest
+    container_name: nighthawk-node-05
+    command: sh -c "mkdir -p /data/node_05 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-06:
+    image: alpine:latest
+    container_name: nighthawk-node-06
+    command: sh -c "mkdir -p /data/node_06 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-07:
+    image: alpine:latest
+    container_name: nighthawk-node-07
+    command: sh -c "mkdir -p /data/node_07 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-08:
+    image: alpine:latest
+    container_name: nighthawk-node-08
+    command: sh -c "mkdir -p /data/node_08 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-09:
+    image: alpine:latest
+    container_name: nighthawk-node-09
+    command: sh -c "mkdir -p /data/node_09 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-10:
+    image: alpine:latest
+    container_name: nighthawk-node-10
+    command: sh -c "mkdir -p /data/node_10 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-11:
+    image: alpine:latest
+    container_name: nighthawk-node-11
+    command: sh -c "mkdir -p /data/node_11 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+  node-12:
+    image: alpine:latest
+    container_name: nighthawk-node-12
+    command: sh -c "mkdir -p /data/node_12 && tail -f /dev/null"
+    volumes:
+      - mesh-data:/data
+    networks:
+      - nighthawk-mesh
+
+volumes:
+  mesh-data:
+
+networks:
+  nighthawk-mesh:
+    driver: bridge
