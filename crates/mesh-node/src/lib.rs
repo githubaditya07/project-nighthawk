@@ -1,10 +1,11 @@
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rand::SeedableRng;
-use rand::rngs::StdRng;
 use shared::{DropletProgress, NetworkImpairment, NodeInfo, NodeStatus};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
@@ -13,8 +14,8 @@ pub const TOTAL_NODES: usize = 12;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MeshError {
-    #[error("Node {0} is currently offline")]
-    NodeOffline(usize),
+    #[error("Node {0} is currently unavailable (offline)")]
+    NodeUnavailable(usize),
     #[error("Node {0} not found")]
     NodeNotFound(usize),
     #[error("IO error: {0}")]
@@ -27,13 +28,16 @@ pub enum MeshError {
 pub struct MeshManager {
     base_dir: PathBuf,
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
-    start_time: Instant,
+    online_since: Arc<RwLock<Vec<Option<Instant>>>>,
+    auto_heal: Arc<AtomicBool>,
 }
 
 impl MeshManager {
     pub fn new<P: AsRef<Path>>(base_dir: P) -> Self {
         let base_path = base_dir.as_ref().to_path_buf();
         let mut node_list = Vec::with_capacity(TOTAL_NODES);
+        let mut uptime_list = Vec::with_capacity(TOTAL_NODES);
+        let now = Instant::now();
 
         for id in 1..=TOTAL_NODES {
             let node_dir = base_path.join(format!("node_{:02}", id));
@@ -52,12 +56,14 @@ impl MeshManager {
                 bytes_transferred: 0,
                 xor_distance: xor_dist,
             });
+            uptime_list.push(Some(now));
         }
 
         Self {
             base_dir: base_path,
             nodes: Arc::new(RwLock::new(node_list)),
-            start_time: Instant::now(),
+            online_since: Arc::new(RwLock::new(uptime_list)),
+            auto_heal: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -71,13 +77,44 @@ impl MeshManager {
 
     pub async fn get_nodes(&self) -> Vec<NodeInfo> {
         let mut list = self.nodes.read().await.clone();
-        let elapsed = self.start_time.elapsed().as_secs();
+        let uptimes = self.online_since.read().await;
+
         for node in list.iter_mut() {
+            let idx = node.node_id.saturating_sub(1);
             if node.status == NodeStatus::Online || node.status == NodeStatus::Degraded {
-                node.uptime_secs = elapsed;
+                node.uptime_secs = uptimes
+                    .get(idx)
+                    .and_then(|opt| *opt)
+                    .map(|t| t.elapsed().as_secs())
+                    .unwrap_or(0);
+            } else {
+                node.uptime_secs = 0;
             }
         }
         list
+    }
+
+    pub async fn get_node(&self, node_id: usize) -> Result<NodeInfo, MeshError> {
+        let nodes = self.nodes.read().await;
+        let mut node = nodes
+            .iter()
+            .find(|n| n.node_id == node_id)
+            .cloned()
+            .ok_or(MeshError::NodeNotFound(node_id))?;
+
+        let uptimes = self.online_since.read().await;
+        let idx = node_id.saturating_sub(1);
+        if node.status == NodeStatus::Online || node.status == NodeStatus::Degraded {
+            node.uptime_secs = uptimes
+                .get(idx)
+                .and_then(|opt| *opt)
+                .map(|t| t.elapsed().as_secs())
+                .unwrap_or(0);
+        } else {
+            node.uptime_secs = 0;
+        }
+
+        Ok(node)
     }
 
     pub async fn get_active_count(&self) -> usize {
@@ -95,31 +132,44 @@ impl MeshManager {
         bytes: &[u8],
         impairment: &NetworkImpairment,
     ) -> Result<DropletProgress, MeshError> {
-        let mut nodes = self.nodes.write().await;
-        let node = nodes
-            .iter_mut()
-            .find(|n| n.node_id == node_id)
-            .ok_or(MeshError::NodeNotFound(node_id))?;
+        // 1. Brief read lock to validate node existence and status
+        let (target_dir, shard_path) = {
+            let nodes = self.nodes.read().await;
+            let node = nodes
+                .iter()
+                .find(|n| n.node_id == node_id)
+                .ok_or(MeshError::NodeNotFound(node_id))?;
 
-        if node.status == NodeStatus::Offline {
-            return Err(MeshError::NodeOffline(node_id));
-        }
+            if node.status == NodeStatus::Offline {
+                return Err(MeshError::NodeUnavailable(node_id));
+            }
 
-        // Apply latency if configured
+            (self.node_dir(node_id), self.shard_file_path(node_id, shard_id))
+        };
+
+        // 2. Simulated network latency sleep outside of any lock
         if impairment.latency_ms > 0 {
             tokio::time::sleep(tokio::time::Duration::from_millis(impairment.latency_ms)).await;
         }
 
-        // Simulate fountain droplet packet transfer
+        // 3. Simulate fountain droplet packet transfer
         let droplet_stats = simulate_droplet_transfer(impairment.packet_loss_pct, bytes.len());
 
-        let target_dir = self.node_dir(node_id);
+        // 4. Perform filesystem I/O outside of locks
         fs::create_dir_all(&target_dir)?;
-        let shard_path = self.shard_file_path(node_id, shard_id);
         fs::write(&shard_path, bytes)?;
 
-        node.bytes_transferred += bytes.len() as u64;
-        node.shard_id = Some(shard_id);
+        // 5. Brief write lock only to record bytes transferred and shard mapping
+        {
+            let mut nodes = self.nodes.write().await;
+            if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
+                if node.status == NodeStatus::Offline {
+                    return Err(MeshError::NodeUnavailable(node_id));
+                }
+                node.bytes_transferred += bytes.len() as u64;
+                node.shard_id = Some(shard_id);
+            }
+        }
 
         Ok(droplet_stats)
     }
@@ -130,17 +180,21 @@ impl MeshManager {
         shard_id: usize,
         impairment: &NetworkImpairment,
     ) -> Result<(Vec<u8>, DropletProgress), MeshError> {
-        let mut nodes = self.nodes.write().await;
-        let node = nodes
-            .iter_mut()
-            .find(|n| n.node_id == node_id)
-            .ok_or(MeshError::NodeNotFound(node_id))?;
+        // 1. Brief read lock to validate node status and path
+        let shard_path = {
+            let nodes = self.nodes.read().await;
+            let node = nodes
+                .iter()
+                .find(|n| n.node_id == node_id)
+                .ok_or(MeshError::NodeNotFound(node_id))?;
 
-        if node.status == NodeStatus::Offline {
-            return Err(MeshError::NodeOffline(node_id));
-        }
+            if node.status == NodeStatus::Offline {
+                return Err(MeshError::NodeUnavailable(node_id));
+            }
 
-        let shard_path = self.shard_file_path(node_id, shard_id);
+            self.shard_file_path(node_id, shard_id)
+        };
+
         if !shard_path.exists() {
             return Err(MeshError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -148,14 +202,22 @@ impl MeshManager {
             )));
         }
 
+        // 2. Simulated network latency sleep outside of locks
         if impairment.latency_ms > 0 {
             tokio::time::sleep(tokio::time::Duration::from_millis(impairment.latency_ms)).await;
         }
 
+        // 3. Read bytes from disk outside of locks
         let bytes = fs::read(&shard_path)?;
         let droplet_stats = simulate_droplet_transfer(impairment.packet_loss_pct, bytes.len());
 
-        node.bytes_transferred += bytes.len() as u64;
+        // 4. Brief write lock only to record transferred bandwidth
+        {
+            let mut nodes = self.nodes.write().await;
+            if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
+                node.bytes_transferred += bytes.len() as u64;
+            }
+        }
 
         Ok((bytes, droplet_stats))
     }
@@ -167,13 +229,19 @@ impl MeshManager {
         specific_ids: Option<Vec<usize>>,
     ) -> (Vec<usize>, usize) {
         let mut nodes = self.nodes.write().await;
+        let mut uptimes = self.online_since.write().await;
         let mut killed = Vec::new();
 
         if let Some(ids) = specific_ids {
             for id in ids {
                 if let Some(node) = nodes.iter_mut().find(|n| n.node_id == id) {
-                    node.status = NodeStatus::Offline;
-                    killed.push(id);
+                    if node.status != NodeStatus::Offline {
+                        node.status = NodeStatus::Offline;
+                        if let Some(slot) = uptimes.get_mut(id.saturating_sub(1)) {
+                            *slot = None;
+                        }
+                        killed.push(id);
+                    }
                 }
             }
         } else if random {
@@ -188,6 +256,9 @@ impl MeshManager {
             for id in online_ids.into_iter().take(count) {
                 if let Some(node) = nodes.iter_mut().find(|n| n.node_id == id) {
                     node.status = NodeStatus::Offline;
+                    if let Some(slot) = uptimes.get_mut(id.saturating_sub(1)) {
+                        *slot = None;
+                    }
                     killed.push(id);
                 }
             }
@@ -199,7 +270,11 @@ impl MeshManager {
                 .take(count)
             {
                 node.status = NodeStatus::Offline;
-                killed.push(node.node_id);
+                let id = node.node_id;
+                if let Some(slot) = uptimes.get_mut(id.saturating_sub(1)) {
+                    *slot = None;
+                }
+                killed.push(id);
             }
         }
 
@@ -220,10 +295,57 @@ impl MeshManager {
         Ok(())
     }
 
+    pub async fn revive_node(&self, node_id: usize) -> Result<usize, MeshError> {
+        let mut nodes = self.nodes.write().await;
+        let mut uptimes = self.online_since.write().await;
+
+        let node = nodes
+            .iter_mut()
+            .find(|n| n.node_id == node_id)
+            .ok_or(MeshError::NodeNotFound(node_id))?;
+
+        node.status = NodeStatus::Online;
+        if let Some(slot) = uptimes.get_mut(node_id.saturating_sub(1)) {
+            *slot = Some(Instant::now());
+        }
+
+        let active = nodes
+            .iter()
+            .filter(|n| n.status != NodeStatus::Offline)
+            .count();
+        Ok(active)
+    }
+
+    pub async fn revive_nodes(&self, node_ids: &[usize]) -> usize {
+        let mut nodes = self.nodes.write().await;
+        let mut uptimes = self.online_since.write().await;
+        let now = Instant::now();
+
+        for id in node_ids {
+            if let Some(node) = nodes.iter_mut().find(|n| n.node_id == *id) {
+                node.status = NodeStatus::Online;
+                if let Some(slot) = uptimes.get_mut(id.saturating_sub(1)) {
+                    *slot = Some(now);
+                }
+            }
+        }
+
+        nodes
+            .iter()
+            .filter(|n| n.status != NodeStatus::Offline)
+            .count()
+    }
+
     pub async fn revive_all_nodes(&self) -> usize {
         let mut nodes = self.nodes.write().await;
-        for node in nodes.iter_mut() {
+        let mut uptimes = self.online_since.write().await;
+        let now = Instant::now();
+
+        for (i, node) in nodes.iter_mut().enumerate() {
             node.status = NodeStatus::Online;
+            if let Some(slot) = uptimes.get_mut(i) {
+                *slot = Some(now);
+            }
         }
         nodes.len()
     }
@@ -250,32 +372,77 @@ impl MeshManager {
             }
         }
 
+        let now = Instant::now();
         let mut nodes = self.nodes.write().await;
-        for node in nodes.iter_mut() {
+        let mut uptimes = self.online_since.write().await;
+
+        for (i, node) in nodes.iter_mut().enumerate() {
             node.status = NodeStatus::Online;
             node.bytes_transferred = 0;
             node.shard_id = Some(node.node_id - 1);
+            if let Some(slot) = uptimes.get_mut(i) {
+                *slot = Some(now);
+            }
         }
 
         Ok(())
+    }
+
+    pub fn set_auto_heal(&self, enabled: bool) {
+        self.auto_heal.store(enabled, Ordering::SeqCst);
+    }
+
+    pub fn is_auto_heal(&self) -> bool {
+        self.auto_heal.load(Ordering::SeqCst)
+    }
+
+    pub async fn check_mesh_health(&self) -> Vec<usize> {
+        let nodes = self.nodes.read().await;
+        nodes
+            .iter()
+            .filter(|n| n.status != NodeStatus::Online)
+            .map(|n| n.node_id)
+            .collect()
+    }
+
+    pub fn spawn_self_healing_watcher<F, Fut>(&self, interval: std::time::Duration, heal_callback: F) -> tokio::task::JoinHandle<()>
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let mesh = self.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            loop {
+                ticker.tick().await;
+                if mesh.is_auto_heal() {
+                    let unhealthy = mesh.check_mesh_health().await;
+                    if !unhealthy.is_empty() {
+                        heal_callback().await;
+                    }
+                }
+            }
+        })
     }
 }
 
 /// Models simplified fountain-droplet forward error correction:
 /// Splits the payload into $K$ source packets, generates rateless coded droplets,
-/// and measures survival against simulated packet loss (up to 50%).
+/// and measures survival against simulated packet loss.
+/// Enforces a maximum droplet transmission cap so extreme packet loss (e.g. >= 95%)
+/// cleanly reports `decoded: false` instead of looping indefinitely.
 pub fn simulate_droplet_transfer(packet_loss_pct: f64, payload_size: usize) -> DropletProgress {
     let base_packets = (payload_size / 65536).clamp(10, 50);
-    let loss_ratio = (packet_loss_pct / 100.0).clamp(0.0, 0.50);
+    let loss_ratio = (packet_loss_pct / 100.0).clamp(0.0, 1.0);
+    let max_droplets = base_packets * 8; // Transmission cap to detect fountain failure
 
     let mut rng = StdRng::seed_from_u64((payload_size as u64) ^ ((packet_loss_pct * 1000.0) as u64) ^ 0xCAFEBABE);
 
-    // In a rateless fountain code, sender continues transmitting coded droplets until receiver collects base_packets
     let mut sent_droplets = 0;
     let mut received_droplets = 0;
     let mut lost_droplets = 0;
 
-    while received_droplets < base_packets {
+    while received_droplets < base_packets && sent_droplets < max_droplets {
         sent_droplets += 1;
         if loss_ratio > 0.0 && rng.gen_bool(loss_ratio) {
             lost_droplets += 1;
@@ -284,11 +451,13 @@ pub fn simulate_droplet_transfer(packet_loss_pct: f64, payload_size: usize) -> D
         }
     }
 
+    let decoded = received_droplets >= base_packets;
+
     DropletProgress {
         packet_loss_pct,
         sent_droplets,
         lost_droplets,
         received_droplets,
-        decoded: true,
+        decoded,
     }
 }

@@ -1,7 +1,7 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        DefaultBodyLimit, Multipart, State,
+        DefaultBodyLimit, Multipart, Path, State,
     },
     http::{header, StatusCode},
     response::{IntoResponse, Response},
@@ -122,6 +122,13 @@ pub struct GenericMessageResponse {
     pub message: String,
 }
 
+#[derive(Serialize)]
+pub struct ReviveResponse {
+    pub status: String,
+    pub node_id: usize,
+    pub active_nodes: usize,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -155,6 +162,8 @@ async fn main() {
     let app = Router::new()
         .route("/api/state", get(handle_get_state))
         .route("/api/upload", post(handle_upload))
+        .route("/api/nodes/{id}/health", get(handle_node_health))
+        .route("/api/nodes/{id}/revive", post(handle_node_revive))
         .route("/api/chaos/kill", post(handle_chaos_kill))
         .route("/api/chaos/corrupt", post(handle_chaos_corrupt))
         .route("/api/chaos/network", post(handle_chaos_network))
@@ -343,6 +352,54 @@ async fn handle_upload(
     Ok(Json(manifest))
 }
 
+async fn handle_node_health(
+    Path(id): Path<usize>,
+    State(app): State<AppState>,
+) -> Result<Json<shared::NodeInfo>, (StatusCode, String)> {
+    let node = app
+        .inner
+        .read()
+        .await
+        .mesh
+        .get_node(id)
+        .await
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
+    Ok(Json(node))
+}
+
+async fn handle_node_revive(
+    Path(id): Path<usize>,
+    State(app): State<AppState>,
+) -> Result<Json<ReviveResponse>, (StatusCode, String)> {
+    let active = app
+        .inner
+        .read()
+        .await
+        .mesh
+        .revive_node(id)
+        .await
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
+
+    app.broadcast(TelemetryEvent::NodeStatusChanged {
+        node_id: id,
+        status: NodeStatus::Online,
+        active_nodes: active,
+    });
+
+    app.broadcast(TelemetryEvent::Log {
+        timestamp: get_iso_timestamp(),
+        level: "INFO".to_string(),
+        code: "NODE_REVIVED".to_string(),
+        message: format!("Node {} manually revived back to Online. Active nodes: {}/12", id, active),
+    });
+
+    Ok(Json(ReviveResponse {
+        status: "success".to_string(),
+        node_id: id,
+        active_nodes: active,
+    }))
+}
+
 async fn handle_chaos_kill(
     State(app): State<AppState>,
     Json(payload): Json<KillRequest>,
@@ -507,6 +564,7 @@ async fn handle_reconstruct(
     let mut collected_shards: Vec<Option<Vec<u8>>> = vec![None; TOTAL_SHARDS];
     let mut surviving_shard_ids = Vec::new();
     let mut rejected_shards = Vec::new();
+    let mut total_detection_ms = 0u128;
 
     // Read and verify shards across all 12 nodes
     for i in 0..TOTAL_SHARDS {
@@ -515,7 +573,9 @@ async fn handle_reconstruct(
         match mesh.read_shard(node_id, i, &impairment).await {
             Ok((bytes, droplet)) => {
                 let expected_hash = &manifest.shards[i].blake3_hash;
+                let det_start = Instant::now();
                 let (matches, actual_hash) = verify_shard(&bytes, expected_hash);
+                total_detection_ms += det_start.elapsed().as_millis();
 
                 app.broadcast(TelemetryEvent::DropletProgress {
                     packet_loss_pct: droplet.packet_loss_pct,
@@ -529,7 +589,7 @@ async fn handle_reconstruct(
                     collected_shards[i] = Some(bytes);
                     surviving_shard_ids.push(i);
                 } else {
-                    rejected_shards.push(node_id);
+                    rejected_shards.push(i);
                     app.broadcast(TelemetryEvent::CorruptedShardRejected {
                         node_id,
                         shard_id: i,
@@ -579,6 +639,7 @@ async fn handle_reconstruct(
     let reconstructed_blake3 = hash_bytes(&recovered_bytes);
     let matched = reconstructed_blake3 == manifest.original_blake3;
     let reconstruction_ms = start.elapsed().as_millis();
+    let detection_ms = total_detection_ms.max(1);
 
     app.broadcast(TelemetryEvent::IntegrityVerified {
         original_blake3: manifest.original_blake3.clone(),
@@ -594,7 +655,7 @@ async fn handle_reconstruct(
         file_size_bytes: manifest.original_size,
         storage_overhead: 1.50,
         encode_ms: app.inner.read().await.last_encode_ms,
-        detection_ms: 12,
+        detection_ms,
         reconstruction_ms,
         healing_ms: 0,
         packet_loss_pct: impairment.packet_loss_pct,
@@ -679,7 +740,7 @@ async fn handle_heal(
         }));
     }
 
-    // Set nodes to Recovering
+    // 1. Transition nodes to Recovering
     app.inner
         .read()
         .await
@@ -695,7 +756,7 @@ async fn handle_heal(
         });
     }
 
-    // Ensure all 12 shards are fully populated using reconstruct_and_regenerate
+    // 2. Ensure all 12 shards are fully populated using reconstruct_and_regenerate
     let _ = reconstruct_and_regenerate(&mut working_shards, manifest.original_size).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -703,44 +764,49 @@ async fn handle_heal(
         )
     })?;
 
-    // Revive all nodes back to Online
-    app.inner.read().await.mesh.revive_all_nodes().await;
-
-    // Write fresh, regenerated shards back to disk
+    // 3. Write fresh, regenerated shards back to disk and verify write succeeded BEFORE reviving nodes
     for shard_id in &regenerated_shards {
         let node_id = shard_id + 1;
-        if let Some(shard_data) = &working_shards[*shard_id] {
-            let _ = app
-                .inner
-                .read()
-                .await
-                .mesh
-                .write_shard(node_id, *shard_id, shard_data, &impairment)
-                .await;
+        let shard_data = working_shards[*shard_id].as_ref().ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Shard {} missing after regeneration", shard_id),
+            )
+        })?;
 
-            app.broadcast(TelemetryEvent::ShardRegenerated {
-                shard_id: *shard_id,
-                target_node_id: node_id,
-            });
-        }
+        app.inner
+            .read()
+            .await
+            .mesh
+            .write_shard(node_id, *shard_id, shard_data, &impairment)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed writing regenerated shard {} to node {}: {}", shard_id, node_id, e),
+                )
+            })?;
+
+        app.broadcast(TelemetryEvent::ShardRegenerated {
+            shard_id: *shard_id,
+            target_node_id: node_id,
+        });
     }
 
-    // Restore is_corrupt = false in manifest
-    {
-        let mut state = app.inner.write().await;
-        if let Some(m) = &mut state.manifest {
-            for s in &mut m.shards {
-                s.is_corrupt = false;
-            }
-        }
-        state.cached_shards = working_shards;
-    }
+    // 4. ONLY AFTER disk writes succeed, revive recovered nodes to Online
+    let active_nodes = app
+        .inner
+        .read()
+        .await
+        .mesh
+        .revive_nodes(&missing_or_corrupt_nodes)
+        .await;
 
     for id in &missing_or_corrupt_nodes {
         app.broadcast(TelemetryEvent::NodeStatusChanged {
             node_id: *id,
             status: NodeStatus::Online,
-            active_nodes: 12,
+            active_nodes,
         });
     }
 
