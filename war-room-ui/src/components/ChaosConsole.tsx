@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Skull, Bomb, ShieldAlert, Cpu, RefreshCw, Zap, Sliders, Wifi } from 'lucide-react';
+import { Skull, Bomb, ShieldAlert, Cpu, RefreshCw, Zap, Sliders } from 'lucide-react';
 import { DropletStats } from '../types';
 
 interface ChaosConsoleProps {
@@ -38,63 +38,63 @@ export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
   };
 
   return (
-    <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-5">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-        <h3 className="text-sm font-bold font-mono text-crimson-400 uppercase tracking-wider flex items-center gap-2">
-          <Skull className="w-4 h-4 text-crimson-400" /> Chaos Monkey Fault Injection Lab
+    <div className="editorial-card rounded-2xl p-6 space-y-5">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <h3 className="text-xs font-sans font-semibold text-cherry uppercase tracking-widest flex items-center gap-2">
+          <Skull className="w-4 h-4 text-cherry" /> Chaos Fault Injection Lab
         </h3>
-        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-          Tolerates 4 of 12 Failures
+        <span className="text-[11px] font-mono text-mid-grey bg-beige-light px-2.5 py-0.5 rounded-full border border-border">
+          Tolerates 4 / 12
         </span>
       </div>
 
       {/* 1. Node Failure Injection Buttons */}
       <div>
-        <label className="text-xs font-mono text-slate-400 block mb-2 font-semibold">
-          Simulate Node Crash Failures:
+        <label className="text-xs font-sans text-dark-grey block mb-2.5 font-medium">
+          Simulate Node Crash Failures
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <button
             onClick={() => onKillNodes(1, false)}
             disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-crimson-500/10 hover:bg-crimson-500/20 text-crimson-300 border border-crimson-500/30 rounded-lg py-2 font-mono text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+            className="flex items-center justify-center gap-1.5 bg-cherry-bg hover:bg-cherry text-cherry hover:text-white border border-cherry-light hover:border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
           >
-            <Bomb className="w-3.5 h-3.5" /> KILL 1 NODE
+            <Bomb className="w-3.5 h-3.5" /> Kill 1
           </button>
           <button
             onClick={() => onKillNodes(2, false)}
             disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-crimson-500/10 hover:bg-crimson-500/20 text-crimson-300 border border-crimson-500/30 rounded-lg py-2 font-mono text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+            className="flex items-center justify-center gap-1.5 bg-cherry-bg hover:bg-cherry text-cherry hover:text-white border border-cherry-light hover:border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
           >
-            <Bomb className="w-3.5 h-3.5" /> KILL 2 NODES
+            <Bomb className="w-3.5 h-3.5" /> Kill 2
           </button>
           <button
             onClick={() => onKillNodes(4, false)}
             disabled={isProcessing || activeNodes < 12}
-            className="flex items-center justify-center gap-1.5 bg-crimson-500/20 hover:bg-crimson-500/30 text-crimson-200 border border-crimson-500/50 rounded-lg py-2 font-mono text-xs font-extrabold transition-all shadow-md shadow-crimson-900/30 active:scale-95 disabled:opacity-40"
+            className="flex items-center justify-center gap-1.5 bg-cherry hover:bg-cherry/90 text-white border border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-40"
           >
-            <Skull className="w-3.5 h-3.5 text-crimson-400" /> KILL 4 NODES
+            <Skull className="w-3.5 h-3.5" /> Kill 4
           </button>
           <button
             onClick={() => onKillNodes(1, true)}
             disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg py-2 font-mono text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+            className="flex items-center justify-center gap-1.5 bg-amber-bg hover:bg-amber text-amber hover:text-white border border-amber-light hover:border-amber rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
           >
-            <Zap className="w-3.5 h-3.5" /> KILL RANDOM
+            <Zap className="w-3.5 h-3.5" /> Random
           </button>
         </div>
       </div>
 
       {/* 2. Physical Bit-Rot Corruption */}
-      <div className="bg-slate-900/70 p-3.5 rounded-lg border border-slate-800">
-        <label className="text-xs font-mono text-slate-300 block mb-2 font-semibold flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-amber-400" /> Physical Shard Disk Bit-Rot Injection:
+      <div className="bg-beige-light p-4 rounded-xl border border-border">
+        <label className="text-xs font-sans text-dark-grey block mb-2.5 font-medium flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-amber" /> Physical Shard Disk Bit-Rot Injection
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <select
             value={selectedNodeToCorrupt}
             onChange={(e) => setSelectedNodeToCorrupt(Number(e.target.value))}
-            className="bg-slate-800 text-white font-mono text-xs border border-slate-700 rounded-lg px-3 py-2 outline-none focus:border-amber-400"
+            className="bg-white text-charcoal font-mono text-xs border border-border rounded-xl px-3 py-2 outline-none focus:border-powder-blue-dark transition-colors"
           >
             {Array.from({ length: 12 }).map((_, i) => (
               <option key={i + 1} value={i + 1}>
@@ -105,9 +105,9 @@ export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
           <button
             onClick={() => onCorruptShard(selectedNodeToCorrupt)}
             disabled={isProcessing}
-            className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg py-2 font-mono text-xs font-bold transition-all active:scale-95 disabled:opacity-40"
+            className="flex-1 bg-amber-bg hover:bg-amber text-amber hover:text-white border border-amber-light hover:border-amber rounded-xl py-2 px-3 font-sans text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
           >
-            CORRUPT SHARD (FLIP 16 BYTES ON DISK)
+            Corrupt Shard (Flip 16 Bytes)
           </button>
         </div>
       </div>
@@ -117,37 +117,39 @@ export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
         <button
           onClick={onReconstruct}
           disabled={isProcessing}
-          className="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-black rounded-lg py-3 font-mono text-xs font-extrabold shadow-lg shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 bg-powder-blue-dark hover:bg-powder-blue text-white rounded-xl py-3 px-4 font-sans text-xs font-semibold tracking-wide shadow-sm transition-all duration-300 active:scale-95 disabled:opacity-50"
         >
           <Cpu className="w-4 h-4" />
-          RECONSTRUCT FILE (8-OF-12 SURVIVING)
+          Reconstruct File (8-of-12)
         </button>
 
         <button
           onClick={onSelfHeal}
           disabled={isProcessing}
-          className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg py-3 font-mono text-xs font-extrabold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 bg-sage hover:bg-sage/90 text-white rounded-xl py-3 px-4 font-sans text-xs font-semibold tracking-wide shadow-sm transition-all duration-300 active:scale-95 disabled:opacity-50"
         >
           <RefreshCw className="w-4 h-4" />
-          SELF-HEAL MESH (RESTORE 12/12)
+          Self-Heal Mesh (12/12)
         </button>
       </div>
 
       {/* 4. Network Impairment & Fountain Droplet Bar */}
-      <div className="bg-slate-900/90 p-4 rounded-lg border border-slate-800 space-y-3 font-mono text-xs">
-        <div className="flex items-center justify-between text-slate-300 font-bold">
-          <span className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-cyan-400" /> Network Impairment Simulation
+      <div className="bg-beige-light p-4 rounded-xl border border-border space-y-3.5 text-xs">
+        <div className="flex items-center justify-between text-charcoal font-medium">
+          <span className="flex items-center gap-2 font-sans">
+            <Sliders className="w-4 h-4 text-powder-blue-dark" /> Network Impairment Simulation
           </span>
-          <span className="text-[10px] text-slate-400">P1 Prototype Layer</span>
+          <span className="text-[10px] font-mono text-mid-grey bg-white px-2 py-0.5 rounded-full border border-border">
+            P1 Prototype
+          </span>
         </div>
 
         {/* Sliders */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div>
-            <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-slate-400">Packet Loss Rate:</span>
-              <span className="text-amber-400 font-bold">{lossSlider}%</span>
+            <div className="flex justify-between text-[11px] mb-1.5">
+              <span className="text-mid-grey font-sans">Packet Loss Rate</span>
+              <span className="text-amber font-mono font-semibold">{lossSlider}%</span>
             </div>
             <input
               type="range"
@@ -156,14 +158,14 @@ export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
               step="5"
               value={lossSlider}
               onChange={(e) => handleNetworkChange(Number(e.target.value), latencySlider)}
-              className="w-full accent-amber-400 cursor-pointer"
+              className="w-full accent-amber cursor-pointer"
             />
           </div>
 
           <div>
-            <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-slate-400">Simulated Latency:</span>
-              <span className="text-purple-400 font-bold">{latencySlider} ms</span>
+            <div className="flex justify-between text-[11px] mb-1.5">
+              <span className="text-mid-grey font-sans">Simulated Latency</span>
+              <span className="text-dusty-pink-dark font-mono font-semibold">{latencySlider} ms</span>
             </div>
             <input
               type="range"
@@ -172,40 +174,40 @@ export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
               step="25"
               value={latencySlider}
               onChange={(e) => handleNetworkChange(lossSlider, Number(e.target.value))}
-              className="w-full accent-purple-400 cursor-pointer"
+              className="w-full accent-dusty-pink-dark cursor-pointer"
             />
           </div>
         </div>
 
         {/* Live Droplet Transfer Stats */}
         {dropletStats && (
-          <div className="mt-3 pt-3 border-t border-slate-800 text-[11px]">
-            <div className="flex justify-between mb-1.5">
-              <span className="text-slate-400">Coded Fountain Droplet Recovery:</span>
-              <span className="text-emerald-400 font-bold">
+          <div className="mt-3 pt-3 border-t border-border text-[11px]">
+            <div className="flex justify-between mb-2">
+              <span className="text-mid-grey font-sans">Fountain Droplet Recovery</span>
+              <span className="text-sage font-mono font-semibold">
                 {dropletStats.decoded ? 'DECODED (Overcame Loss)' : 'PENDING'}
               </span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden flex">
+            <div className="w-full bg-white border border-border rounded-full h-2.5 overflow-hidden flex">
               <div
                 style={{
                   width: `${(dropletStats.received_droplets / dropletStats.sent_droplets) * 100}%`,
                 }}
-                className="bg-emerald-500 h-full transition-all duration-300"
+                className="bg-sage h-full transition-all duration-500"
                 title="Received Droplets"
               />
               <div
                 style={{
                   width: `${(dropletStats.lost_droplets / dropletStats.sent_droplets) * 100}%`,
                 }}
-                className="bg-crimson-500 h-full transition-all duration-300"
+                className="bg-cherry h-full transition-all duration-500"
                 title="Lost Droplets"
               />
             </div>
-            <div className="flex justify-between mt-1 text-[10px] text-slate-400">
-              <span>Sent: {dropletStats.sent_droplets} droplets</span>
-              <span>Received: {dropletStats.received_droplets}</span>
-              <span className="text-crimson-400">Lost: {dropletStats.lost_droplets}</span>
+            <div className="flex justify-between mt-1.5 text-[10px] font-mono text-mid-grey">
+              <span>Sent: {dropletStats.sent_droplets}</span>
+              <span className="text-sage font-medium">Received: {dropletStats.received_droplets}</span>
+              <span className="text-cherry font-medium">Lost: {dropletStats.lost_droplets}</span>
             </div>
           </div>
         )}

@@ -10,18 +10,19 @@ interface ShardMatrixProps {
 
 export const ShardMatrix: React.FC<ShardMatrixProps> = ({ shards, nodes, regeneratedShards }) => {
   return (
-    <div className="glass-panel rounded-xl p-5 border border-slate-800">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold font-mono text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-          <Grid className="w-4 h-4" /> 12-Shard Distribution Matrix [RS(8,4)]
+    <div className="editorial-card rounded-2xl p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5 pb-3 border-b border-border">
+        <h3 className="text-xs font-sans font-semibold text-charcoal uppercase tracking-widest flex items-center gap-2">
+          <Grid className="w-4 h-4 text-powder-blue-dark" /> 12-Shard Distribution Matrix [RS(8,4)]
         </h3>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-          <span className="text-cyan-400 font-bold">D0–D7: Data</span> |{' '}
-          <span className="text-purple-400 font-bold">P0–P3: Parity</span>
+        <div className="flex items-center gap-3 text-[11px] font-mono">
+          <span className="text-powder-blue-dark font-semibold">D0–D7: Data</span>
+          <span className="text-light-grey">|</span>
+          <span className="text-dusty-pink-dark font-semibold">P0–P3: Parity</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {Array.from({ length: 12 }).map((_, index) => {
           const shard = shards.find((s) => s.shard_id === index);
           const assignedNode = nodes.find((n) => n.node_id === index + 1);
@@ -32,24 +33,24 @@ export const ShardMatrix: React.FC<ShardMatrixProps> = ({ shards, nodes, regener
           const isData = index < 8;
           const label = isData ? `D${index}` : `P${index - 8}`;
 
-          let badgeColor = 'bg-slate-800 text-slate-400 border-slate-700';
+          let badgeColor = 'bg-white text-mid-grey border-border';
           let statusText = 'UNASSIGNED';
           let Icon = AlertCircle;
 
           if (isNodeOffline) {
-            badgeColor = 'bg-crimson-500/20 text-crimson-400 border-crimson-500/40';
+            badgeColor = 'bg-cherry-bg text-cherry border-cherry-light';
             statusText = 'OFFLINE';
             Icon = XCircle;
           } else if (isCorrupt) {
-            badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
-            statusText = 'CORRUPT / REJECTED';
+            badgeColor = 'bg-amber-bg text-amber border-amber-light';
+            statusText = 'CORRUPT';
             Icon = AlertCircle;
           } else if (isRegenerated) {
-            badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/40';
+            badgeColor = 'bg-powder-blue-light/40 text-powder-blue-dark border-powder-blue-light';
             statusText = 'REGENERATED';
             Icon = RefreshCw;
           } else if (shard) {
-            badgeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+            badgeColor = 'bg-sage-bg text-sage border-sage-light';
             statusText = 'VALID';
             Icon = ShieldCheck;
           }
@@ -57,51 +58,51 @@ export const ShardMatrix: React.FC<ShardMatrixProps> = ({ shards, nodes, regener
           return (
             <div
               key={index}
-              className={`bg-slate-900/90 rounded-lg p-2.5 border transition-all ${
+              className={`rounded-xl p-3 border node-transition hover:-translate-y-0.5 ${
                 isNodeOffline
-                  ? 'border-crimson-500/40 bg-crimson-950/10'
+                  ? 'border-cherry-light bg-cherry-bg/50'
                   : isCorrupt
-                  ? 'border-amber-500/40 bg-amber-950/10'
-                  : 'border-slate-800 hover:border-slate-700'
+                  ? 'border-amber-light bg-amber-bg/50'
+                  : 'border-border bg-beige-light hover:border-powder-blue-light'
               }`}
             >
-              {/* Shard Label & Type */}
-              <div className="flex items-center justify-between mb-1.5">
+              {/* Shard Label & Node */}
+              <div className="flex items-center justify-between mb-2">
                 <span
-                  className={`text-xs font-mono font-extrabold px-1.5 py-0.5 rounded ${
+                  className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-md border ${
                     isData
-                      ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-                      : 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                      ? 'bg-powder-blue-light/30 text-powder-blue-dark border-powder-blue-light'
+                      : 'bg-dusty-pink-light/35 text-dusty-pink-dark border-dusty-pink-light'
                   }`}
                 >
                   {label}
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">
+                <span className="text-[10px] font-mono text-mid-grey">
                   Node {index + 1 < 10 ? `0${index + 1}` : index + 1}
                 </span>
               </div>
 
               {/* Live Badge */}
-              <div className="mb-2">
+              <div className="mb-2.5">
                 <span
-                  className={`text-[9px] font-mono font-bold flex items-center gap-1 px-1.5 py-0.5 rounded border ${badgeColor}`}
+                  className={`text-[9.5px] font-mono font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md border node-transition ${badgeColor}`}
                 >
-                  <Icon className="w-2.5 h-2.5" />
+                  <Icon className="w-2.5 h-2.5 shrink-0" />
                   <span className="truncate">{statusText}</span>
                 </span>
               </div>
 
               {/* Blake3 Hash snippet */}
-              <div className="text-[9px] font-mono text-slate-500">
+              <div className="text-[10px] font-mono text-mid-grey">
                 {shard ? (
                   <div>
-                    <div className="text-slate-400">{(shard.size_bytes / 1024).toFixed(1)} KB</div>
-                    <div className="text-slate-500 truncate" title={shard.blake3_hash}>
-                      {shard.blake3_hash.slice(0, 10)}...
+                    <div className="text-dark-grey font-medium">{(shard.size_bytes / 1024).toFixed(1)} KB</div>
+                    <div className="text-mid-grey/80 truncate" title={shard.blake3_hash}>
+                      {shard.blake3_hash.slice(0, 12)}...
                     </div>
                   </div>
                 ) : (
-                  <span className="italic text-slate-600">Pending upload</span>
+                  <span className="italic text-mid-grey/60 font-sans">Pending upload</span>
                 )}
               </div>
             </div>

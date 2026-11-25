@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, ShieldAlert, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface IntegrityMonitorProps {
   originalHash: string | null;
@@ -19,59 +19,59 @@ export const IntegrityMonitor: React.FC<IntegrityMonitorProps> = ({
   rejectedShardAlert,
 }) => {
   return (
-    <div className="glass-panel rounded-xl p-5 border border-slate-800 space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-        <h3 className="text-sm font-bold font-mono text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-cyan-400" /> Cryptographic Integrity & Recovery Monitor
+    <div className="editorial-card rounded-2xl p-6 space-y-5">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <h3 className="text-xs font-sans font-semibold text-charcoal uppercase tracking-widest flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-powder-blue-dark" /> Cryptographic Integrity &amp; Recovery Monitor
         </h3>
-        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+        <span className="text-[11px] font-mono font-medium text-sage bg-sage-bg px-2.5 py-0.5 rounded-full border border-sage-light">
           Blake3 256-Bit
         </span>
       </div>
 
       {/* Two Distinct Stages Header */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-slate-900/90 p-3 rounded-lg border border-slate-800">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-bold mb-1">
-            Stage 1: File Reconstruction
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="bg-beige-light p-4 rounded-xl border border-border">
+          <div className="text-[10px] font-sans uppercase tracking-wider text-powder-blue-dark font-semibold mb-1.5">
+            Stage 1 &middot; File Reconstruction
           </div>
-          <div className="text-xs font-mono text-slate-300">
+          <div className="text-xs font-mono text-dark-grey">
             {reconstructionMs > 0 ? (
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Complete in {reconstructionMs} ms
+              <span className="text-sage font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Complete in {reconstructionMs} ms
               </span>
             ) : (
-              <span className="text-slate-500 italic">Awaiting trigger</span>
+              <span className="text-mid-grey italic font-sans">Awaiting trigger</span>
             )}
           </div>
         </div>
 
-        <div className="bg-slate-900/90 p-3 rounded-lg border border-slate-800">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold mb-1">
-            Stage 2: Network Self-Healing
+        <div className="bg-beige-light p-4 rounded-xl border border-border">
+          <div className="text-[10px] font-sans uppercase tracking-wider text-dusty-pink-dark font-semibold mb-1.5">
+            Stage 2 &middot; Network Self-Healing
           </div>
-          <div className="text-xs font-mono text-slate-300">
+          <div className="text-xs font-mono text-dark-grey">
             {healingMs > 0 ? (
-              <span className="text-blue-400 font-bold flex items-center gap-1">
-                <RefreshCw className="w-3.5 h-3.5" /> 12/12 Restored in {healingMs} ms
+              <span className="text-sage font-semibold flex items-center gap-1.5">
+                <RefreshCw className="w-4 h-4" /> 12/12 Restored in {healingMs} ms
               </span>
             ) : (
-              <span className="text-slate-500 italic">Awaiting trigger</span>
+              <span className="text-mid-grey italic font-sans">Awaiting trigger</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Red Alert: Corrupted Shard Rejected Card */}
+      {/* Cherry Alert: Corrupted Shard Rejected Card */}
       {rejectedShardAlert && (
-        <div className="bg-crimson-950/40 border border-crimson-500/50 rounded-lg p-3 flex items-start gap-3 animate-pulse">
-          <ShieldAlert className="w-5 h-5 text-crimson-400 shrink-0 mt-0.5" />
-          <div className="font-mono text-xs">
-            <div className="text-crimson-300 font-extrabold uppercase">
-              SECURITY AUDIT: CORRUPTED SHARD REJECTED
+        <div className="bg-cherry-bg border border-cherry-light rounded-xl p-4 flex items-start gap-3 node-transition">
+          <ShieldAlert className="w-5 h-5 text-cherry shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <div className="text-cherry font-sans font-bold uppercase tracking-wide">
+              Security Audit: Corrupted Shard Rejected
             </div>
-            <div className="text-slate-300 text-[11px] mt-0.5">{rejectedShardAlert}</div>
-            <div className="text-crimson-400/80 text-[10px] mt-1">
+            <div className="text-dark-grey font-mono text-[11px] mt-1">{rejectedShardAlert}</div>
+            <div className="text-cherry/80 font-sans text-[11px] mt-1">
               Tampered shard excluded from Reed-Solomon interpolation pool.
             </div>
           </div>
@@ -79,23 +79,27 @@ export const IntegrityMonitor: React.FC<IntegrityMonitorProps> = ({
       )}
 
       {/* Side-by-Side Hash Comparison */}
-      <div className="bg-black/60 rounded-lg p-3.5 border border-slate-800 space-y-3 font-mono text-xs">
+      <div className="bg-beige-light rounded-xl p-4 border border-border space-y-3 text-xs">
         <div>
-          <span className="text-slate-400 text-[11px] block mb-1">Original Blake3 Digest:</span>
-          <div className="bg-slate-900 p-2 rounded text-[11px] text-cyan-300 break-all border border-slate-800 font-mono">
+          <span className="text-mid-grey font-sans text-[11px] font-medium block mb-1.5">
+            Original Blake3 Digest
+          </span>
+          <div className="bg-white p-2.5 rounded-lg text-[11px] text-powder-blue-dark break-all border border-border font-mono">
             {originalHash || '— Pending File Ingestion —'}
           </div>
         </div>
 
         <div>
-          <span className="text-slate-400 text-[11px] block mb-1">Reconstructed Blake3 Digest:</span>
+          <span className="text-mid-grey font-sans text-[11px] font-medium block mb-1.5">
+            Reconstructed Blake3 Digest
+          </span>
           <div
-            className={`p-2 rounded text-[11px] break-all border font-mono ${
+            className={`p-2.5 rounded-lg text-[11px] break-all border font-mono node-transition ${
               matched === true
-                ? 'bg-emerald-950/30 text-emerald-300 border-emerald-500/40'
+                ? 'bg-sage-bg text-sage border-sage-light font-semibold'
                 : matched === false
-                ? 'bg-crimson-950/30 text-crimson-300 border-crimson-500/40'
-                : 'bg-slate-900 text-slate-500 border-slate-800'
+                ? 'bg-cherry-bg text-cherry border-cherry-light font-semibold'
+                : 'bg-white text-mid-grey border-border'
             }`}
           >
             {reconstructedHash || '— Pending Reconstruction (Trigger 8-of-12) —'}
@@ -103,26 +107,26 @@ export const IntegrityMonitor: React.FC<IntegrityMonitorProps> = ({
         </div>
       </div>
 
-      {/* Prominent Verification Banner */}
+      {/* Verification Status Banner */}
       {matched === true && (
-        <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-3 text-center font-mono">
-          <div className="flex items-center justify-center gap-2 text-emerald-400 font-extrabold text-sm tracking-wider">
+        <div className="bg-sage-bg border border-sage-light rounded-xl p-4 text-center node-transition">
+          <div className="flex items-center justify-center gap-2 text-sage font-sans font-bold text-sm tracking-wide">
             <CheckCircle2 className="w-5 h-5" />
-            INTEGRITY VERIFIED — BIT-EXACT MATCH
+            INTEGRITY VERIFIED &mdash; BIT-EXACT MATCH
           </div>
-          <p className="text-[10px] text-emerald-300/80 mt-1">
-            Galois Field GF(2^8) math recovered 100% of payload bits despite offline nodes & physical disk bit rot.
+          <p className="text-xs font-sans text-dark-grey/80 mt-1">
+            Galois Field GF(2^8) matrix inversion recovered 100% of payload bits despite offline nodes &amp; disk bit rot.
           </p>
         </div>
       )}
 
       {matched === false && (
-        <div className="bg-crimson-500/10 border border-crimson-500/40 rounded-lg p-3 text-center font-mono">
-          <div className="flex items-center justify-center gap-2 text-crimson-400 font-extrabold text-sm tracking-wider">
+        <div className="bg-cherry-bg border border-cherry-light rounded-xl p-4 text-center node-transition">
+          <div className="flex items-center justify-center gap-2 text-cherry font-sans font-bold text-sm tracking-wide">
             <AlertTriangle className="w-5 h-5" />
             HASH MISMATCH DETECTED
           </div>
-          <p className="text-[10px] text-crimson-300/80 mt-1">
+          <p className="text-xs font-sans text-dark-grey/80 mt-1">
             Data integrity compromised. Reconstructed digest does not match original file hash.
           </p>
         </div>

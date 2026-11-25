@@ -1,6 +1,6 @@
 import React from 'react';
 import { NodeInfo, NodeStatus } from '../types';
-import { Shield, Server } from 'lucide-react';
+import { useParallax } from '../hooks/useEditorialMotion';
 
 interface TopologyRingProps {
   nodes: NodeInfo[];
@@ -18,213 +18,268 @@ export const TopologyRing: React.FC<TopologyRingProps> = ({
   const size = 520;
   const center = size / 2;
   const radius = 190;
+  const { offsetY, scale } = useParallax(14);
 
   const getNodeColor = (status: NodeStatus) => {
     switch (status) {
       case 'Online':
         return {
-          stroke: '#10B981',
-          fill: '#064E3B',
-          glow: 'rgba(16, 185, 129, 0.7)',
-          text: 'text-emerald-400',
+          stroke: '#4D8FB8',      // --color-powder-blue-dark
+          outerFill: '#B8D4E8',   // --color-powder-blue-light
+          innerFill: '#FFFFFF',
+          labelColor: '#1A1A1A',
         };
       case 'Offline':
         return {
-          stroke: '#EF4444',
-          fill: '#7F1D1D',
-          glow: 'rgba(239, 68, 68, 0.7)',
-          text: 'text-crimson-400',
+          stroke: '#B5363A',      // --color-cherry
+          outerFill: '#E8AAAC',   // --color-cherry-light
+          innerFill: '#FAEAEA',   // --color-cherry-bg
+          labelColor: '#B5363A',
         };
       case 'Degraded':
         return {
-          stroke: '#F59E0B',
-          fill: '#78350F',
-          glow: 'rgba(245, 158, 11, 0.7)',
-          text: 'text-amber-400',
+          stroke: '#C8853A',      // --color-amber
+          outerFill: '#E8C89A',   // --color-amber-light
+          innerFill: '#FBF2E8',   // --color-amber-bg
+          labelColor: '#C8853A',
         };
       case 'Recovering':
         return {
-          stroke: '#3B82F6',
-          fill: '#1E3A8A',
-          glow: 'rgba(59, 130, 246, 0.7)',
-          text: 'text-blue-400',
+          stroke: '#7A9E7E',      // --color-sage
+          outerFill: '#B4CDB6',   // --color-sage-light
+          innerFill: '#EAF2EA',   // --color-sage-bg
+          labelColor: '#7A9E7E',
         };
     }
   };
 
   return (
-    <div className="glass-panel rounded-xl p-5 border border-slate-800 relative flex flex-col items-center justify-center min-h-[580px]">
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-        <div className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-        <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-widest">
-          12-Node Polar Mesh Topology
-        </span>
+    <div className="editorial-card rounded-2xl p-6 relative flex flex-col items-center justify-between min-h-[600px] overflow-hidden">
+      {/* Header Row */}
+      <div className="w-full flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border z-10">
+        <div className="flex items-center gap-2.5">
+          <span className="h-2 w-2 rounded-full bg-powder-blue-dark" />
+          <span className="text-xs font-sans font-semibold text-charcoal uppercase tracking-widest">
+            12-Node Polar Mesh Topology
+          </span>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-3.5 text-[11px] font-sans font-medium text-mid-grey">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-powder-blue-dark inline-block" /> Online
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-sage inline-block" /> Healing
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber inline-block" /> Degraded
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-cherry inline-block" /> Offline
+          </span>
+        </div>
       </div>
 
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-3 text-[11px] font-mono">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Online</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-crimson-500 inline-block" /> Offline</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Degraded</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Recovering</span>
+      {/* Parallax Topology Canvas */}
+      <div
+        className="my-auto py-3 transition-transform duration-150 ease-out will-change-transform"
+        style={{ transform: `translateY(${offsetY}px) scale(${scale})` }}
+      >
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible max-w-full h-auto">
+          <defs>
+            <radialGradient id="editorialHubGradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#B8D4E8" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="#FAF7F2" stopOpacity="0.95" />
+            </radialGradient>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#1A1A1A" floodOpacity="0.08" />
+            </filter>
+          </defs>
+
+          {/* Outer & Inner Editorial Hairline Grid Rings */}
+          <circle cx={center} cy={center} r={radius} fill="none" stroke="#D4D0CA" strokeWidth="1.25" strokeDasharray="4 4" />
+          <circle cx={center} cy={center} r={radius * 0.62} fill="none" stroke="#E8E4DC" strokeWidth="1" strokeDasharray="2 4" />
+          <circle cx={center} cy={center} r={radius + 42} fill="none" stroke="#E8E4DC" strokeWidth="0.75" opacity="0.65" />
+
+          {/* Central NIGHTHAWK Coordinator Hub */}
+          <g filter="url(#softShadow)">
+            <circle
+              cx={center}
+              cy={center}
+              r={58}
+              fill="url(#editorialHubGradient)"
+              stroke="#7BAFD4"
+              strokeWidth="1.75"
+              className="node-transition"
+            />
+            <circle
+              cx={center}
+              cy={center}
+              r={49}
+              fill="#FFFFFF"
+              stroke="#B8D4E8"
+              strokeWidth="1"
+              strokeDasharray="5 4"
+              className="animate-spin-slow origin-center"
+            />
+            <text
+              x={center}
+              y={center - 8}
+              textAnchor="middle"
+              fill="#1A1A1A"
+              fontSize="14"
+              fontWeight="600"
+              fontFamily='"Instrument Serif", Georgia, serif'
+              letterSpacing="0.04em"
+            >
+              Nighthawk
+            </text>
+            <text
+              x={center}
+              y={center + 9}
+              textAnchor="middle"
+              fill="#6B6B6B"
+              fontSize="8.5"
+              fontWeight="600"
+              fontFamily="Inter, sans-serif"
+              letterSpacing="0.14em"
+            >
+              COORDINATOR
+            </text>
+            <text
+              x={center}
+              y={center + 24}
+              textAnchor="middle"
+              fill="#4D8FB8"
+              fontSize="9.5"
+              fontWeight="600"
+              fontFamily='"JetBrains Mono", monospace'
+            >
+              RS(8,4) HUB
+            </text>
+          </g>
+
+          {/* 12 Mesh Nodes & Connectors */}
+          {nodes.map((node, index) => {
+            const angle = (index * (360 / 12) - 90) * (Math.PI / 180);
+            const x = center + radius * Math.cos(angle);
+            const y = center + radius * Math.sin(angle);
+            const isSelected = selectedNode?.node_id === node.node_id;
+            const colors = getNodeColor(node.status);
+
+            const isTransferring =
+              activeAnimation === 'distributing' ||
+              (activeAnimation === 'reconstructing' && node.status === 'Online') ||
+              (activeAnimation === 'healing' && (node.status === 'Recovering' || node.status === 'Online'));
+
+            const lineStroke = isTransferring
+              ? activeAnimation === 'healing' || activeAnimation === 'reconstructing'
+                ? '#7A9E7E'
+                : '#4D8FB8'
+              : node.status === 'Offline'
+              ? '#E8E4DC'
+              : colors.stroke;
+
+            return (
+              <g key={node.node_id} onClick={() => onSelectNode(node)} className="cursor-pointer group">
+                {/* Connecting Vector Line */}
+                <line
+                  x1={center}
+                  y1={center}
+                  x2={x}
+                  y2={y}
+                  stroke={lineStroke}
+                  strokeWidth={isSelected ? '2.25' : isTransferring ? '2' : '1.15'}
+                  strokeDasharray={isTransferring ? '6 4' : 'none'}
+                  className={`node-transition ${isTransferring ? 'animate-dash' : ''}`}
+                  opacity={node.status === 'Offline' ? 0.5 : isTransferring ? 0.95 : 0.6}
+                />
+
+                {/* Selected Halo Ring */}
+                {isSelected && (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={30}
+                    fill="none"
+                    stroke="#1A1A1A"
+                    strokeWidth="1.25"
+                    strokeDasharray="3 3"
+                  />
+                )}
+
+                {/* Node Outer Ring */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={24}
+                  fill={colors.outerFill}
+                  stroke={isSelected ? '#1A1A1A' : colors.stroke}
+                  strokeWidth={isSelected ? '2.25' : '1.75'}
+                  filter="url(#softShadow)"
+                  className="node-transition group-hover:scale-110 origin-center"
+                />
+
+                {/* Node Inner Disk */}
+                <circle cx={x} cy={y} r={17} fill={colors.innerFill} className="node-transition" />
+
+                {/* Node Label (N01 .. N12) */}
+                <text
+                  x={x}
+                  y={y + 4}
+                  textAnchor="middle"
+                  fill={colors.labelColor}
+                  fontSize="10.5"
+                  fontWeight="600"
+                  fontFamily='"JetBrains Mono", monospace'
+                  className="node-transition"
+                >
+                  N{node.node_id < 10 ? `0${node.node_id}` : node.node_id}
+                </text>
+
+                {/* Shard Label Outside Ring */}
+                <text
+                  x={center + (radius + 36) * Math.cos(angle)}
+                  y={center + (radius + 36) * Math.sin(angle) + 3.5}
+                  textAnchor="middle"
+                  fill={node.status === 'Offline' ? '#B5363A' : '#6B6B6B'}
+                  fontSize="10"
+                  fontFamily='"JetBrains Mono", monospace'
+                  fontWeight="600"
+                  className="node-transition"
+                >
+                  {node.shard_id !== null
+                    ? node.shard_id < 8
+                      ? `D${node.shard_id}`
+                      : `P${node.shard_id - 8}`
+                    : '—'}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
-
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
-        <defs>
-          <radialGradient id="hubGradient" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#00F0FF" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#111827" stopOpacity="0.9" />
-          </radialGradient>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-
-        {/* Outer and Inner Grid Rings */}
-        <circle cx={center} cy={center} r={radius} fill="none" stroke="#1E293B" strokeWidth="1.5" strokeDasharray="4 4" />
-        <circle cx={center} cy={center} r={radius * 0.6} fill="none" stroke="#1E293B" strokeWidth="1" strokeDasharray="2 4" />
-
-        {/* Central NIGHTHAWK Coordinator Hub */}
-        <g className="cursor-pointer">
-          <circle
-            cx={center}
-            cy={center}
-            r={54}
-            fill="url(#hubGradient)"
-            stroke="#00F0FF"
-            strokeWidth="2"
-            filter="url(#glow)"
-            className="transition-all duration-300"
-          />
-          <circle cx={center} cy={center} r={46} fill="#090D16" stroke="#00F0FF" strokeWidth="1" strokeDasharray="6 3" className="animate-spin-slow origin-center" />
-          <text
-            x={center}
-            y={center - 8}
-            textAnchor="middle"
-            fill="#00F0FF"
-            fontSize="12"
-            fontWeight="bold"
-            fontFamily="monospace"
-          >
-            NIGHTHAWK
-          </text>
-          <text
-            x={center}
-            y={center + 12}
-            textAnchor="middle"
-            fill="#94A3B8"
-            fontSize="10"
-            fontFamily="monospace"
-          >
-            COORDINATOR
-          </text>
-          <text
-            x={center}
-            y={center + 26}
-            textAnchor="middle"
-            fill="#38BDF8"
-            fontSize="9"
-            fontFamily="monospace"
-          >
-            RS(8,4) HUB
-          </text>
-        </g>
-
-        {/* 12 Mesh Nodes & Connectors */}
-        {nodes.map((node, index) => {
-          // Angle in radians: 12 nodes spaced equally around circle (30 deg each)
-          const angle = (index * (360 / 12) - 90) * (Math.PI / 180);
-          const x = center + radius * Math.cos(angle);
-          const y = center + radius * Math.sin(angle);
-          const isSelected = selectedNode?.node_id === node.node_id;
-          const colors = getNodeColor(node.status);
-
-          // Determine animated transfer line
-          const isTransferring =
-            activeAnimation === 'distributing' ||
-            (activeAnimation === 'reconstructing' && node.status === 'Online') ||
-            (activeAnimation === 'healing' && (node.status === 'Recovering' || node.status === 'Online'));
-
-          return (
-            <g key={node.node_id} onClick={() => onSelectNode(node)} className="cursor-pointer group">
-              {/* Connecting Vector Line */}
-              <line
-                x1={center}
-                y1={center}
-                x2={x}
-                y2={y}
-                stroke={isTransferring ? '#00F0FF' : node.status === 'Offline' ? '#334155' : colors.stroke}
-                strokeWidth={isSelected ? '2.5' : isTransferring ? '2' : '1'}
-                strokeDasharray={isTransferring ? '6 4' : 'none'}
-                className={isTransferring ? 'animate-dash' : ''}
-                opacity={node.status === 'Offline' ? 0.3 : 0.8}
-              />
-
-              {/* Node Outer Ring */}
-              <circle
-                cx={x}
-                cy={y}
-                r={24}
-                fill={colors.fill}
-                stroke={isSelected ? '#FFFFFF' : colors.stroke}
-                strokeWidth={isSelected ? '3' : '2'}
-                filter="url(#glow)"
-                className="transition-all duration-300 group-hover:scale-110 origin-center"
-              />
-
-              {/* Node Inner Disk */}
-              <circle cx={x} cy={y} r={17} fill="#090D16" />
-
-              {/* Node Label (N01 .. N12) */}
-              <text
-                x={x}
-                y={y + 4}
-                textAnchor="middle"
-                fill={colors.stroke}
-                fontSize="11"
-                fontWeight="bold"
-                fontFamily="monospace"
-              >
-                N{node.node_id < 10 ? `0${node.node_id}` : node.node_id}
-              </text>
-
-              {/* Shard Label Outside Ring */}
-              <text
-                x={center + (radius + 32) * Math.cos(angle)}
-                y={center + (radius + 32) * Math.sin(angle) + 4}
-                textAnchor="middle"
-                fill={node.status === 'Offline' ? '#64748B' : '#CBD5E1'}
-                fontSize="10"
-                fontFamily="monospace"
-                fontWeight="600"
-              >
-                {node.shard_id !== null ? (node.shard_id < 8 ? `D${node.shard_id}` : `P${node.shard_id - 8}`) : '—'}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
 
       {/* Animation Status Banner at Bottom */}
-      <div className="mt-2 text-center">
+      <div className="w-full pt-3 border-t border-border text-center z-10">
         {activeAnimation === 'distributing' && (
-          <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded border border-cyan-500/30 animate-pulse">
-            DISPERSING RS(8,4) SHARDS TO 12 NODES...
+          <span className="inline-flex items-center gap-2 text-xs font-mono font-medium text-powder-blue-dark bg-powder-blue-light/30 px-4 py-1.5 rounded-full border border-powder-blue-light animate-pulse">
+            Dispersing RS(8,4) shards across 12 storage nodes...
           </span>
         )}
         {activeAnimation === 'reconstructing' && (
-          <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded border border-emerald-500/30 animate-pulse">
-            STREAMING SURVIVING SHARDS TO COORDINATOR (8-of-12)...
+          <span className="inline-flex items-center gap-2 text-xs font-mono font-medium text-sage bg-sage-bg px-4 py-1.5 rounded-full border border-sage-light animate-pulse">
+            Streaming surviving shards to coordinator (8-of-12)...
           </span>
         )}
         {activeAnimation === 'healing' && (
-          <span className="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded border border-blue-500/30 animate-pulse">
-            REGENERATING & RESTORING MISSING SHARDS OUTWARD...
+          <span className="inline-flex items-center gap-2 text-xs font-mono font-medium text-sage bg-sage-bg px-4 py-1.5 rounded-full border border-sage-light animate-pulse">
+            Regenerating & restoring missing shards outward...
           </span>
         )}
         {activeAnimation === 'idle' && (
-          <span className="text-[11px] font-mono text-slate-500">
-            Click any node ring to inspect detailed hardware telemetry & Blake3 hashes
+          <span className="text-xs font-sans text-mid-grey">
+            Select any node on the ring to inspect hardware telemetry, shard metadata, and Blake3 digests
           </span>
         )}
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HudBar } from './components/HudBar';
 import { TopologyRing } from './components/TopologyRing';
 import { NodeDrawer } from './components/NodeDrawer';
@@ -9,9 +9,24 @@ import { IntegrityMonitor } from './components/IntegrityMonitor';
 import { EventTimeline, LogItem } from './components/EventTimeline';
 import { BenchmarkPanel } from './components/BenchmarkPanel';
 import { SystemSnapshot, NodeInfo, TelemetryEvent, DropletStats } from './types';
+import { useScrollReveal } from './hooks/useEditorialMotion';
 
 const API_BASE = 'http://localhost:8080';
 const WS_URL = 'ws://localhost:8080/ws/telemetry';
+
+const EditorialTitle: React.FC<{ text: string }> = ({ text }) => (
+  <span className="inline-block overflow-hidden align-bottom">
+    {text.split('').map((char, idx) => (
+      <span
+        key={idx}
+        className="char-reveal"
+        style={{ '--char-index': idx } as React.CSSProperties}
+      >
+        {char === ' ' ? '\u00A0' : char}
+      </span>
+    ))}
+  </span>
+);
 
 export const App: React.FC = () => {
   const [state, setState] = useState<SystemSnapshot | null>(null);
@@ -25,6 +40,10 @@ export const App: React.FC = () => {
   const [rejectedShardAlert, setRejectedShardAlert] = useState<string | null>(null);
   const [lastRecoveryMs, setLastRecoveryMs] = useState<number>(0);
   const [dropletStats, setDropletStats] = useState<DropletStats | null>(null);
+
+  const shardReveal = useScrollReveal<HTMLDivElement>();
+  const integrityReveal = useScrollReveal<HTMLDivElement>();
+  const bottomReveal = useScrollReveal<HTMLDivElement>();
 
   // Fetch initial state snapshot
   const fetchState = async () => {
@@ -191,7 +210,6 @@ export const App: React.FC = () => {
     try {
       const totalBytes = Math.floor(sizeMb * 1024 * 1024);
       const buffer = new Uint8Array(totalBytes);
-      // Fast deterministic pattern fill
       for (let i = 0; i < totalBytes; i += 4) {
         const val = (i / 4) & 0xff;
         buffer[i] = val;
@@ -311,12 +329,15 @@ export const App: React.FC = () => {
 
   if (!state) {
     return (
-      <div className="min-h-screen bg-obsidian flex flex-col items-center justify-center font-mono">
-        <div className="w-12 h-12 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin mb-4" />
-        <div className="text-cyan-400 font-bold text-sm tracking-widest uppercase animate-pulse">
-          Connecting to Project NIGHTHAWK Gateway...
+      <div className="min-h-screen bg-beige flex flex-col items-center justify-center font-sans relative">
+        <div className="grain-overlay" />
+        <div className="w-11 h-11 rounded-full border-2 border-powder-blue-dark border-t-transparent animate-spin mb-5" />
+        <div className="text-charcoal font-serif text-2xl tracking-tight">
+          Connecting to Project Nighthawk
         </div>
-        <div className="text-slate-500 text-xs mt-2">Listening on http://localhost:8080</div>
+        <div className="text-mid-grey font-mono text-xs mt-2">
+          Listening on http://localhost:8080
+        </div>
       </div>
     );
   }
@@ -326,7 +347,10 @@ export const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-obsidian flex flex-col font-sans">
+    <div className="min-h-screen bg-beige flex flex-col font-sans relative">
+      {/* Subtle Paper Grain Overlay */}
+      <div className="grain-overlay" />
+
       {/* Top HUD Bar */}
       <HudBar
         state={state}
@@ -335,12 +359,50 @@ export const App: React.FC = () => {
         lastRecoveryMs={lastRecoveryMs}
       />
 
-      {/* Main War-Room Grid */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto p-4 md:p-6 space-y-6">
+      {/* Editorial Hero Masthead */}
+      <section className="border-b border-border bg-beige-light/70">
+        <div className="max-w-[1640px] mx-auto px-6 py-8 md:py-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <div
+              className="text-[11px] font-mono uppercase tracking-[0.2em] text-dusty-pink-dark mb-2 line-reveal"
+              style={{ '--line-delay': 0 } as React.CSSProperties}
+            >
+              Decentralized Self-Healing Erasure Mesh &middot; Team StrawHats
+            </div>
+            <h2 className="text-3xl md:text-5xl font-serif text-charcoal tracking-tight leading-none">
+              <EditorialTitle text="Resilient Storage Architecture" />
+            </h2>
+            <p
+              className="text-sm text-mid-grey mt-3 max-w-2xl leading-relaxed line-reveal"
+              style={{ '--line-delay': 3 } as React.CSSProperties}
+            >
+              Reed-Solomon RS(8,4) over Galois Field GF(2^8) with Blake3 binary Merkle verification — delivering 1.50x storage overhead while withstanding up to four simultaneous node failures.
+            </p>
+          </div>
+
+          <div
+            className="flex flex-wrap items-center gap-2.5 stagger-entry"
+            style={{ '--stagger': 4 } as React.CSSProperties}
+          >
+            <span className="px-3 py-1.5 rounded-full bg-white border border-border text-xs font-mono text-dark-grey">
+              {state.redundancy_level}
+            </span>
+            <span className="px-3 py-1.5 rounded-full bg-powder-blue-light/30 border border-powder-blue-light text-xs font-mono text-powder-blue-dark">
+              50% Storage Savings
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Editorial Workspace */}
+      <main className="flex-1 max-w-[1640px] w-full mx-auto px-4 md:px-6 py-8 space-y-8 relative z-10">
         {/* Top Half: 12-Node Topology Ring + Ingestion File Manager & Chaos Lab */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-7 items-start">
           {/* Topology Ring SVG (7 cols on XL) */}
-          <div className="xl:col-span-7">
+          <div
+            className="xl:col-span-7 stagger-entry"
+            style={{ '--stagger': 1 } as React.CSSProperties}
+          >
             <TopologyRing
               nodes={state.nodes}
               selectedNode={selectedNode}
@@ -350,50 +412,69 @@ export const App: React.FC = () => {
           </div>
 
           {/* Controls & File Manager (5 cols on XL) */}
-          <div className="xl:col-span-5 space-y-6">
-            <FileManager
-              manifest={state.manifest}
-              canDownload={state.can_download}
-              onUploadFile={handleUploadFile}
-              onGenerateAndUpload={handleGenerateAndUpload}
-              onDownload={handleDownload}
-              isUploading={isUploading}
-            />
+          <div className="xl:col-span-5 space-y-7">
+            <div className="stagger-entry" style={{ '--stagger': 2 } as React.CSSProperties}>
+              <FileManager
+                manifest={state.manifest}
+                canDownload={state.can_download}
+                onUploadFile={handleUploadFile}
+                onGenerateAndUpload={handleGenerateAndUpload}
+                onDownload={handleDownload}
+                isUploading={isUploading}
+              />
+            </div>
 
-            <ChaosConsole
-              onKillNodes={handleKillNodes}
-              onCorruptShard={handleCorruptShard}
-              onReconstruct={handleReconstruct}
-              onSelfHeal={handleSelfHeal}
-              onUpdateNetwork={handleUpdateNetwork}
-              currentLossPct={state.impairment.packet_loss_pct}
-              currentLatencyMs={state.impairment.latency_ms}
-              dropletStats={dropletStats}
-              activeNodes={state.active_nodes}
-              isProcessing={isProcessing}
-            />
+            <div className="stagger-entry" style={{ '--stagger': 3 } as React.CSSProperties}>
+              <ChaosConsole
+                onKillNodes={handleKillNodes}
+                onCorruptShard={handleCorruptShard}
+                onReconstruct={handleReconstruct}
+                onSelfHeal={handleSelfHeal}
+                onUpdateNetwork={handleUpdateNetwork}
+                currentLossPct={state.impairment.packet_loss_pct}
+                currentLatencyMs={state.impairment.latency_ms}
+                dropletStats={dropletStats}
+                activeNodes={state.active_nodes}
+                isProcessing={isProcessing}
+              />
+            </div>
           </div>
         </div>
 
         {/* Shard Distribution Matrix */}
-        <ShardMatrix
-          shards={state.manifest?.shards || []}
-          nodes={state.nodes}
-          regeneratedShards={regeneratedShards}
-        />
+        <div
+          ref={shardReveal.ref}
+          className={`reveal-on-scroll ${shardReveal.isVisible ? 'is-visible' : ''}`}
+        >
+          <ShardMatrix
+            shards={state.manifest?.shards || []}
+            nodes={state.nodes}
+            regeneratedShards={regeneratedShards}
+          />
+        </div>
 
         {/* Cryptographic Integrity Monitor */}
-        <IntegrityMonitor
-          originalHash={state.manifest?.original_blake3 || null}
-          reconstructedHash={state.reconstructed_blake3}
-          matched={state.integrity_verified}
-          reconstructionMs={lastRecoveryMs}
-          healingMs={state.benchmarks[state.benchmarks.length - 1]?.healing_ms || 0}
-          rejectedShardAlert={rejectedShardAlert}
-        />
+        <div
+          ref={integrityReveal.ref}
+          className={`reveal-on-scroll ${integrityReveal.isVisible ? 'is-visible' : ''}`}
+        >
+          <IntegrityMonitor
+            originalHash={state.manifest?.original_blake3 || null}
+            reconstructedHash={state.reconstructed_blake3}
+            matched={state.integrity_verified}
+            reconstructionMs={lastRecoveryMs}
+            healingMs={state.benchmarks[state.benchmarks.length - 1]?.healing_ms || 0}
+            rejectedShardAlert={rejectedShardAlert}
+          />
+        </div>
 
         {/* Bottom Half: Live Audit Log & Benchmark Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div
+          ref={bottomReveal.ref}
+          className={`grid grid-cols-1 lg:grid-cols-12 gap-7 reveal-on-scroll ${
+            bottomReveal.isVisible ? 'is-visible' : ''
+          }`}
+        >
           <div className="lg:col-span-5">
             <EventTimeline logs={logs} onClearLogs={() => setLogs([])} />
           </div>
@@ -412,11 +493,12 @@ export const App: React.FC = () => {
         onCorruptNode={(id) => handleCorruptShard(id)}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-4 px-6 text-center text-xs font-mono text-slate-500 bg-obsidian">
-        Project NIGHTHAWK • IEEE BMSIT&M Winter of Projects 2026 • Track: COMSOC-SW-02 • Team StrawHats (Aditya, Bhuvanesh, Sneha, Nidhi)
+      {/* Editorial Footer */}
+      <footer className="border-t border-border py-5 px-6 text-center text-xs font-sans text-mid-grey bg-beige-light relative z-10">
+        Project NIGHTHAWK &middot; IEEE BMSIT&amp;M Winter of Projects 2026 &middot; Track: COMSOC-SW-02 &middot; Team StrawHats (Aditya, Bhuvanesh, Sneha, Nidhi)
       </footer>
     </div>
   );
 };
+
 export default App;
