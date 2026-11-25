@@ -1,5 +1,6 @@
 /target
 /data
+bin/
 war-room-ui/node_modules
 war-room-ui/dist
 .env

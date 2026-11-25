@@ -59,8 +59,17 @@ pub fn verify_shard(data: &[u8], expected_hash: &str) -> (bool, String) {
     (matches, actual_hash)
 }
 
-/// Mutates the physical .shard file on disk: seeks to the midpoint,
-/// XORs 16 bytes with 0xFF (bit rot simulation), and flushes to disk.
+/// Returns the first `max_bytes` of a slice formatted as uppercase space-separated hex pairs.
+pub fn format_hex_preview(data: &[u8], max_bytes: usize) -> String {
+    data.iter()
+        .take(max_bytes)
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Mutates the physical .shard file on disk: flips bytes in the header (offset 0)
+/// and at the midpoint via XOR 0xFF (bit rot simulation), and flushes to disk.
 pub fn corrupt_shard_file_on_disk(path: &Path) -> Result<(), String> {
     let mut file = OpenOptions::new()
         .read(true)
@@ -77,23 +86,42 @@ pub fn corrupt_shard_file_on_disk(path: &Path) -> Result<(), String> {
         return Err("Cannot corrupt empty shard file".to_string());
     }
 
-    let midpoint = file_len / 2;
-    file.seek(SeekFrom::Start(midpoint))
-        .map_err(|e| format!("Seek failed on {}: {}", path.display(), e))?;
-
-    let bytes_to_corrupt = 16.min((file_len - midpoint) as usize).max(1);
-    let mut buf = vec![0u8; bytes_to_corrupt];
-    file.read_exact(&mut buf)
-        .map_err(|e| format!("Read failed on {}: {}", path.display(), e))?;
-
-    for b in buf.iter_mut() {
+    // Mutate header bytes so live 64-byte Hex X-Ray immediately reveals disk bit-rot
+    let header_len = 16.min(file_len as usize);
+    let mut header_buf = vec![0u8; header_len];
+    file.seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Seek start failed on {}: {}", path.display(), e))?;
+    file.read_exact(&mut header_buf)
+        .map_err(|e| format!("Read header failed on {}: {}", path.display(), e))?;
+    for b in header_buf.iter_mut() {
         *b ^= 0xFF;
     }
+    file.seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Seek back to start failed on {}: {}", path.display(), e))?;
+    file.write_all(&header_buf)
+        .map_err(|e| format!("Write header failed on {}: {}", path.display(), e))?;
 
-    file.seek(SeekFrom::Start(midpoint))
-        .map_err(|e| format!("Seek back failed on {}: {}", path.display(), e))?;
-    file.write_all(&buf)
-        .map_err(|e| format!("Write failed on {}: {}", path.display(), e))?;
+    // Also mutate 16 bytes at the midpoint if file is large enough
+    let midpoint = file_len / 2;
+    if midpoint >= header_len as u64 {
+        file.seek(SeekFrom::Start(midpoint))
+            .map_err(|e| format!("Seek failed on {}: {}", path.display(), e))?;
+
+        let bytes_to_corrupt = 16.min((file_len - midpoint) as usize).max(1);
+        let mut buf = vec![0u8; bytes_to_corrupt];
+        file.read_exact(&mut buf)
+            .map_err(|e| format!("Read failed on {}: {}", path.display(), e))?;
+
+        for b in buf.iter_mut() {
+            *b ^= 0xFF;
+        }
+
+        file.seek(SeekFrom::Start(midpoint))
+            .map_err(|e| format!("Seek back failed on {}: {}", path.display(), e))?;
+        file.write_all(&buf)
+            .map_err(|e| format!("Write failed on {}: {}", path.display(), e))?;
+    }
+
     file.sync_all()
         .map_err(|e| format!("Flush failed on {}: {}", path.display(), e))?;
 

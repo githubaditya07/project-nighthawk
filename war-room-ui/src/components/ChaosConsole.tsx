@@ -1,216 +1,209 @@
-import React, { useState } from 'react';
-import { Skull, Bomb, ShieldAlert, Cpu, RefreshCw, Zap, Sliders } from 'lucide-react';
-import { DropletStats } from '../types';
+import React from 'react';
+import { Skull, ZapOff, ShieldAlert, Sparkles, Sliders, Dices } from 'lucide-react';
+import { DropletStats, NodeInfo } from '../types';
+import { DropletCanvas } from './DropletCanvas';
+
+export interface ChaosLogItem {
+  id: string;
+  timestamp: string;
+  level: string;
+  code: string;
+  message: string;
+}
 
 interface ChaosConsoleProps {
+  nodes: NodeInfo[];
   onKillNodes: (count: number, random: boolean) => void;
   onCorruptShard: (nodeId: number) => void;
-  onReconstruct: () => void;
+  onChaosRoulette: () => void;
   onSelfHeal: () => void;
   onUpdateNetwork: (lossPct: number, latencyMs: number) => void;
+  onReset: () => void;
   currentLossPct: number;
   currentLatencyMs: number;
   dropletStats: DropletStats | null;
   activeNodes: number;
   isProcessing: boolean;
+  logs: ChaosLogItem[];
+  onClearLogs: () => void;
 }
 
 export const ChaosConsole: React.FC<ChaosConsoleProps> = ({
+  nodes,
   onKillNodes,
   onCorruptShard,
-  onReconstruct,
+  onChaosRoulette,
   onSelfHeal,
   onUpdateNetwork,
+  onReset,
   currentLossPct,
   currentLatencyMs,
   dropletStats,
   activeNodes,
   isProcessing,
+  logs,
+  onClearLogs,
 }) => {
-  const [selectedNodeToCorrupt, setSelectedNodeToCorrupt] = useState<number>(3);
-  const [lossSlider, setLossSlider] = useState<number>(currentLossPct);
-  const [latencySlider, setLatencySlider] = useState<number>(currentLatencyMs);
-
-  const handleNetworkChange = (loss: number, latency: number) => {
-    setLossSlider(loss);
-    setLatencySlider(latency);
-    onUpdateNetwork(loss, latency);
-  };
+  const offlineCount = 12 - activeNodes;
 
   return (
-    <div className="editorial-card rounded-2xl p-6 space-y-5">
-      <div className="flex items-center justify-between pb-3 border-b border-border">
-        <h3 className="text-xs font-sans font-semibold text-cherry uppercase tracking-widest flex items-center gap-2">
-          <Skull className="w-4 h-4 text-cherry" /> Chaos Fault Injection Lab
+    <div className="editorial-card rounded-2xl p-6 sm:p-7 space-y-5 reveal-on-scroll">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2">
+          <Sliders className="w-4 h-4 text-[#4D8FB8]" />
+          <span>Chaos &amp; Healing Controls</span>
         </h3>
-        <span className="text-[11px] font-mono text-mid-grey bg-beige-light px-2.5 py-0.5 rounded-full border border-border">
-          Tolerates 4 / 12
+        <span
+          id="lab-shard-counter"
+          className="font-mono-tech text-xs px-2.5 py-1 rounded-full border"
+          style={{
+            backgroundColor:
+              offlineCount > 4 ? '#FAEAEA' : offlineCount > 0 ? '#FBF2E8' : '#EAF2EA',
+            color:
+              offlineCount > 4 ? '#B5363A' : offlineCount > 0 ? '#C8853A' : '#7A9E7E',
+            borderColor:
+              offlineCount > 4 ? '#E8AAAC' : offlineCount > 0 ? '#E8C89A' : '#B4CDB6',
+          }}
+        >
+          {activeNodes} / 12 Shards
         </span>
       </div>
 
-      {/* 1. Node Failure Injection Buttons */}
-      <div>
-        <label className="text-xs font-sans text-dark-grey block mb-2.5 font-medium">
-          Simulate Node Crash Failures
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <button
-            onClick={() => onKillNodes(1, false)}
-            disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-cherry-bg hover:bg-cherry text-cherry hover:text-white border border-cherry-light hover:border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
-          >
-            <Bomb className="w-3.5 h-3.5" /> Kill 1
-          </button>
-          <button
-            onClick={() => onKillNodes(2, false)}
-            disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-cherry-bg hover:bg-cherry text-cherry hover:text-white border border-cherry-light hover:border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
-          >
-            <Bomb className="w-3.5 h-3.5" /> Kill 2
-          </button>
-          <button
-            onClick={() => onKillNodes(4, false)}
-            disabled={isProcessing || activeNodes < 12}
-            className="flex items-center justify-center gap-1.5 bg-cherry hover:bg-cherry/90 text-white border border-cherry rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-40"
-          >
-            <Skull className="w-3.5 h-3.5" /> Kill 4
-          </button>
-          <button
-            onClick={() => onKillNodes(1, true)}
-            disabled={isProcessing || activeNodes <= 8}
-            className="flex items-center justify-center gap-1.5 bg-amber-bg hover:bg-amber text-amber hover:text-white border border-amber-light hover:border-amber rounded-xl py-2 font-mono text-[11px] font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
-          >
-            <Zap className="w-3.5 h-3.5" /> Random
-          </button>
-        </div>
-      </div>
+      {/* Prominent Judge Chaos Roulette Stress Trigger */}
+      <button
+        id="btn-chaos-roulette"
+        type="button"
+        onClick={onChaosRoulette}
+        disabled={isProcessing}
+        className="w-full px-4 py-3.5 rounded-xl bg-gradient-to-r from-[#B5363A] to-[#C8853A] hover:opacity-95 text-white text-xs sm:text-sm font-semibold tracking-wide transition-all shadow-md active:scale-[0.99] flex items-center justify-center gap-2.5 disabled:opacity-45"
+      >
+        <Dices className="w-4 h-4" />
+        <span>JUDGE CHAOS ROULETTE (MAX 4-FAULT STRESS)</span>
+      </button>
 
-      {/* 2. Physical Bit-Rot Corruption */}
-      <div className="bg-beige-light p-4 rounded-xl border border-border">
-        <label className="text-xs font-sans text-dark-grey block mb-2.5 font-medium flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-amber" /> Physical Shard Disk Bit-Rot Injection
-        </label>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <select
-            value={selectedNodeToCorrupt}
-            onChange={(e) => setSelectedNodeToCorrupt(Number(e.target.value))}
-            className="bg-white text-charcoal font-mono text-xs border border-border rounded-xl px-3 py-2 outline-none focus:border-powder-blue-dark transition-colors"
-          >
-            {Array.from({ length: 12 }).map((_, i) => (
-              <option key={i + 1} value={i + 1}>
-                Node {i + 1 < 10 ? `0${i + 1}` : i + 1} ({i < 8 ? `Data D${i}` : `Parity P${i - 8}`})
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => onCorruptShard(selectedNodeToCorrupt)}
-            disabled={isProcessing}
-            className="flex-1 bg-amber-bg hover:bg-amber text-amber hover:text-white border border-amber-light hover:border-amber rounded-xl py-2 px-3 font-sans text-xs font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40"
-          >
-            Corrupt Shard (Flip 16 Bytes)
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Core Action Triggers: Reconstruct vs Self-Heal */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
-          onClick={onReconstruct}
-          disabled={isProcessing}
-          className="flex items-center justify-center gap-2 bg-powder-blue-dark hover:bg-powder-blue text-white rounded-xl py-3 px-4 font-sans text-xs font-semibold tracking-wide shadow-sm transition-all duration-300 active:scale-95 disabled:opacity-50"
+          id="btn-kill-2"
+          type="button"
+          onClick={() => onKillNodes(2, false)}
+          disabled={isProcessing || activeNodes <= 8}
+          className="px-4 py-3 rounded-xl bg-[#FAEAEA] hover:bg-[#F5D8D8] border border-[#E8AAAC] text-[#B5363A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
         >
-          <Cpu className="w-4 h-4" />
-          Reconstruct File (8-of-12)
+          <ZapOff className="w-4 h-4" />
+          <span>Kill 2 Nodes</span>
         </button>
 
         <button
+          id="btn-kill-4"
+          type="button"
+          onClick={() => onKillNodes(4, false)}
+          disabled={isProcessing || activeNodes < 12}
+          className="px-4 py-3 rounded-xl bg-[#FAEAEA] hover:bg-[#F5D8D8] border border-[#E8AAAC] text-[#B5363A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
+        >
+          <Skull className="w-4 h-4" />
+          <span>Kill 4 Nodes (Max)</span>
+        </button>
+
+        <button
+          id="btn-corrupt-bit"
+          type="button"
+          onClick={() => {
+            const online = nodes.filter((n) => n.status === 'Online');
+            const target = online.length
+              ? online[Math.floor(Math.random() * online.length)]
+              : nodes[0];
+            if (target) onCorruptShard(target.node_id);
+          }}
+          disabled={isProcessing}
+          className="px-4 py-3 rounded-xl bg-[#FBF2E8] hover:bg-[#F5E4CF] border border-[#E8C89A] text-[#C8853A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
+        >
+          <ShieldAlert className="w-4 h-4" />
+          <span>Bit-Rot (Blake3)</span>
+        </button>
+
+        <button
+          id="btn-heal-mesh"
+          type="button"
           onClick={onSelfHeal}
           disabled={isProcessing}
-          className="flex items-center justify-center gap-2 bg-sage hover:bg-sage/90 text-white rounded-xl py-3 px-4 font-sans text-xs font-semibold tracking-wide shadow-sm transition-all duration-300 active:scale-95 disabled:opacity-50"
+          className="px-4 py-3 rounded-xl bg-[#EAF2EA] hover:bg-[#DCEAD8] border border-[#B4CDB6] text-[#7A9E7E] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
         >
-          <RefreshCw className="w-4 h-4" />
-          Self-Heal Mesh (12/12)
+          <Sparkles className="w-4 h-4" />
+          <span>Auto-Heal to 12/12</span>
         </button>
       </div>
 
-      {/* 4. Network Impairment & Fountain Droplet Bar */}
-      <div className="bg-beige-light p-4 rounded-xl border border-border space-y-3.5 text-xs">
-        <div className="flex items-center justify-between text-charcoal font-medium">
-          <span className="flex items-center gap-2 font-sans">
-            <Sliders className="w-4 h-4 text-powder-blue-dark" /> Network Impairment Simulation
-          </span>
-          <span className="text-[10px] font-mono text-mid-grey bg-white px-2 py-0.5 rounded-full border border-border">
-            P1 Prototype
-          </span>
+      <div className="pt-2 border-t border-[#E8E4DC] flex items-center justify-between gap-4">
+        <div className="text-xs text-[#6B6B6B]">
+          Packet Loss Sim:{' '}
+          <span className="font-mono-tech font-medium text-[#1A1A1A]">{currentLossPct}%</span>
         </div>
+        <input
+          id="packet-loss-slider"
+          type="range"
+          min="0"
+          max="40"
+          step="5"
+          value={currentLossPct}
+          onChange={(e) => onUpdateNetwork(Number(e.target.value), currentLatencyMs)}
+          className="w-36 accent-[#4D8FB8] cursor-pointer"
+        />
+        <button
+          id="btn-reset-mesh"
+          type="button"
+          onClick={onReset}
+          className="text-xs font-mono-tech uppercase tracking-wider text-[#6B6B6B] hover:text-[#1A1A1A] underline"
+        >
+          Reset
+        </button>
+      </div>
 
-        {/* Sliders */}
-        <div className="space-y-3">
-          <div>
-            <div className="flex justify-between text-[11px] mb-1.5">
-              <span className="text-mid-grey font-sans">Packet Loss Rate</span>
-              <span className="text-amber font-mono font-semibold">{lossSlider}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="50"
-              step="5"
-              value={lossSlider}
-              onChange={(e) => handleNetworkChange(Number(e.target.value), latencySlider)}
-              className="w-full accent-amber cursor-pointer"
-            />
-          </div>
+      {/* Live Fountain-Droplet Packet Stream Canvas */}
+      <DropletCanvas packetLossPct={currentLossPct} dropletStats={dropletStats} />
 
-          <div>
-            <div className="flex justify-between text-[11px] mb-1.5">
-              <span className="text-mid-grey font-sans">Simulated Latency</span>
-              <span className="text-dusty-pink-dark font-mono font-semibold">{latencySlider} ms</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="500"
-              step="25"
-              value={latencySlider}
-              onChange={(e) => handleNetworkChange(lossSlider, Number(e.target.value))}
-              className="w-full accent-dusty-pink-dark cursor-pointer"
-            />
-          </div>
+      {/* Live Event Log */}
+      <div className="bg-[#F5F0E8] border border-[#E8E4DC] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-mono-tech uppercase tracking-wider text-[#6B6B6B]">
+            War-Room Event Stream
+          </span>
+          <button
+            type="button"
+            onClick={onClearLogs}
+            className="text-[10px] font-mono-tech text-[#6B6B6B] hover:text-[#1A1A1A] underline"
+          >
+            Clear
+          </button>
         </div>
-
-        {/* Live Droplet Transfer Stats */}
-        {dropletStats && (
-          <div className="mt-3 pt-3 border-t border-border text-[11px]">
-            <div className="flex justify-between mb-2">
-              <span className="text-mid-grey font-sans">Fountain Droplet Recovery</span>
-              <span className="text-sage font-mono font-semibold">
-                {dropletStats.decoded ? 'DECODED (Overcame Loss)' : 'PENDING'}
-              </span>
+        <div
+          id="event-log"
+          className="space-y-1.5 text-xs font-mono-tech text-[#2D2D2D] max-h-36 overflow-y-auto"
+        >
+          {logs.length === 0 ? (
+            <div>
+              <span style={{ color: '#7A9E7E', fontWeight: 600 }}>[OK]</span> 12/12 nodes ready
+              for RS(8,4) distribution.
             </div>
-            <div className="w-full bg-white border border-border rounded-full h-2.5 overflow-hidden flex">
-              <div
-                style={{
-                  width: `${(dropletStats.received_droplets / dropletStats.sent_droplets) * 100}%`,
-                }}
-                className="bg-sage h-full transition-all duration-500"
-                title="Received Droplets"
-              />
-              <div
-                style={{
-                  width: `${(dropletStats.lost_droplets / dropletStats.sent_droplets) * 100}%`,
-                }}
-                className="bg-cherry h-full transition-all duration-500"
-                title="Lost Droplets"
-              />
-            </div>
-            <div className="flex justify-between mt-1.5 text-[10px] font-mono text-mid-grey">
-              <span>Sent: {dropletStats.sent_droplets}</span>
-              <span className="text-sage font-medium">Received: {dropletStats.received_droplets}</span>
-              <span className="text-cherry font-medium">Lost: {dropletStats.lost_droplets}</span>
-            </div>
-          </div>
-        )}
+          ) : (
+            logs.slice(0, 12).map((log) => {
+              const lvl = log.level.toUpperCase();
+              const tagColor =
+                lvl === 'ERROR'
+                  ? '#B5363A'
+                  : lvl === 'WARN'
+                  ? '#C8853A'
+                  : lvl === 'SUCCESS'
+                  ? '#7A9E7E'
+                  : '#4D8FB8';
+              return (
+                <div key={log.id}>
+                  <span style={{ color: tagColor, fontWeight: 600 }}>[{log.code || lvl}]</span>{' '}
+                  {log.message}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );

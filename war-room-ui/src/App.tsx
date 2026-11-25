@@ -5,22 +5,17 @@ import {
   Radar,
   Cpu,
   RefreshCw,
-  Sliders,
-  ZapOff,
-  Skull,
-  ShieldAlert,
-  Sparkles,
   UploadCloud,
   Download,
   Zap,
-  CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react';
 import { SystemSnapshot, NodeInfo, TelemetryEvent, DropletStats } from './types';
 import { AtmosphericStage } from './components/AtmosphericStage';
 import { EditorialNav } from './components/EditorialNav';
-import { DropletCanvas } from './components/DropletCanvas';
-import { InspectorCard } from './components/InspectorCard';
+import { ChaosConsole, ChaosLogItem } from './components/ChaosConsole';
+import { IntegrityMonitor } from './components/IntegrityMonitor';
+import { BenchmarkPanel } from './components/BenchmarkPanel';
+import { NodeDrawer } from './components/NodeDrawer';
 import {
   ensureAmbientBed,
   playTactileClick,
@@ -32,14 +27,6 @@ import {
 
 const API_BASE = 'http://localhost:8080';
 const WS_URL = 'ws://localhost:8080/ws/telemetry';
-
-interface LogItem {
-  id: string;
-  timestamp: string;
-  level: string;
-  code: string;
-  message: string;
-}
 
 const NODE_STATUS_UI = {
   Online: { hex: '#7A9E7E', bg: '#EAF2EA', border: '#B4CDB6', label: 'Healthy' },
@@ -77,12 +64,13 @@ const RevealWords: React.FC<{ text: string; className?: string; as?: 'h2' | 'h3'
 export const App: React.FC = () => {
   const [state, setState] = useState<SystemSnapshot | null>(null);
   const [selectedNode, setSelectedNode] = useState<NodeInfo | null>(null);
-  const [logs, setLogs] = useState<LogItem[]>([]);
+  const [logs, setLogs] = useState<ChaosLogItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [rejectedShardAlert, setRejectedShardAlert] = useState<string | null>(null);
   const [lastRecoveryMs, setLastRecoveryMs] = useState<number>(0);
   const [dropletStats, setDropletStats] = useState<DropletStats | null>(null);
+  const [inspectRefreshKey, setInspectRefreshKey] = useState<number>(0);
 
   // Atmospheric UI state
   const [weatherEnabled, setWeatherEnabled] = useState(true);
@@ -102,7 +90,6 @@ export const App: React.FC = () => {
   });
   const toastTimerRef = useRef<number | null>(null);
 
-  // Count-up animated benchmarks
   const [countupVals, setCountupVals] = useState({ overhead: '1.50×', survival: '100%', loss: '40%' });
   const countupsDoneRef = useRef(false);
 
@@ -114,7 +101,7 @@ export const App: React.FC = () => {
     }, 2800);
   };
 
-  // Fetch initial state snapshot (UNCHANGED API CALL)
+  // Fetch initial state snapshot
   const fetchState = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/state`);
@@ -134,7 +121,7 @@ export const App: React.FC = () => {
     fetchState();
   }, []);
 
-  // WebSocket Live Telemetry Connection (UNCHANGED WS LOGIC)
+  // WebSocket Live Telemetry Connection
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -178,7 +165,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const addLog = (log: LogItem) => {
+  const addLog = (log: ChaosLogItem) => {
     setLogs((prev) => [log, ...prev.slice(0, 49)]);
   };
 
@@ -196,10 +183,12 @@ export const App: React.FC = () => {
 
       case 'FileEncoded':
         fetchState();
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       case 'NodeStatusChanged':
         fetchState();
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       case 'CorruptedShardRejected':
@@ -207,6 +196,7 @@ export const App: React.FC = () => {
           `Node ${event.payload.node_id} (Shard ${event.payload.shard_id}) failed Blake3 hash check. Expected: ${event.payload.expected_hash.slice(0, 10)}... Actual: ${event.payload.actual_hash.slice(0, 10)}...`
         );
         fetchState();
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       case 'ReconstructionStarted':
@@ -222,12 +212,14 @@ export const App: React.FC = () => {
           key: prev.key + 1,
           targetIndices: [event.payload.target_node_id - 1],
         }));
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       case 'RedundancyRestored':
         setRejectedShardAlert(null);
         setLastRecoveryMs(Number(event.payload.healing_ms));
         fetchState();
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       case 'DropletProgress':
@@ -240,6 +232,7 @@ export const App: React.FC = () => {
         setDropletStats(null);
         setSelectedNode(null);
         fetchState();
+        setInspectRefreshKey((k) => k + 1);
         break;
 
       default:
@@ -248,7 +241,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Scroll observers & chapter tracking & ambient bed boot
   useEffect(() => {
     if (!state) return;
 
@@ -277,7 +269,6 @@ export const App: React.FC = () => {
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
 
-    // Benchmark count-up observer
     const benchSection = document.getElementById('benchmarks');
     let benchObs: IntersectionObserver | null = null;
     if (benchSection) {
@@ -316,12 +307,11 @@ export const App: React.FC = () => {
     };
   }, [Boolean(state)]);
 
-  // Keep ambient audio bed synced with toggles
   useEffect(() => {
     ensureAmbientBed(sfxEnabled, weatherEnabled);
   }, [sfxEnabled, weatherEnabled]);
 
-  // 1. Upload File (UNCHANGED API CALL)
+  // 1. Upload File
   const handleUploadFile = async (file: File) => {
     setIsUploading(true);
     try {
@@ -333,6 +323,7 @@ export const App: React.FC = () => {
       });
       if (res.ok) {
         await fetchState();
+        setInspectRefreshKey((k) => k + 1);
         playHealChime(2, weatherEnabled);
         showToast(`Encoded "${file.name}" across 12 RS(8,4) shards.`, '#7A9E7E');
       }
@@ -343,7 +334,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // 2. Generate and Upload synthetic test payload (UNCHANGED API CALL)
+  // 2. Generate and Upload synthetic test payload
   const handleGenerateAndUpload = async (sizeMb: number) => {
     setIsUploading(true);
     playTactileClick();
@@ -366,16 +357,17 @@ export const App: React.FC = () => {
     }
   };
 
-  // 3. Kill Nodes (UNCHANGED API CALL)
-  const handleKillNodes = async (count: number, random: boolean) => {
+  // 3. Kill Nodes
+  const handleKillNodes = async (count: number, random: boolean, nodeIds?: number[]) => {
     setIsProcessing(true);
     try {
       await fetch(`${API_BASE}/api/chaos/kill`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count, random }),
+        body: JSON.stringify({ count, random, node_ids: nodeIds }),
       });
       await fetchState();
+      setInspectRefreshKey((k) => k + 1);
       setLightningTrigger((k) => k + 1);
       playThunderStrike(weatherEnabled);
       showToast(`Simulated ${count}-node failure. Data remains 100% intact.`, '#B5363A');
@@ -386,7 +378,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // 4. Corrupt Shard (UNCHANGED API CALL)
+  // 4. Corrupt Shard
   const handleCorruptShard = async (nodeId: number) => {
     setIsProcessing(true);
     try {
@@ -396,6 +388,7 @@ export const App: React.FC = () => {
         body: JSON.stringify({ node_id: nodeId }),
       });
       await fetchState();
+      setInspectRefreshKey((k) => k + 1);
       playBitRotGlitch();
       showToast(`Injected bit-rot on Node N-${String(nodeId).padStart(2, '0')}.`, '#C8853A');
     } catch (e) {
@@ -405,7 +398,30 @@ export const App: React.FC = () => {
     }
   };
 
-  // 5. Reconstruct (UNCHANGED API CALL)
+  // 4b. Judge Chaos Roulette
+  const handleChaosRoulette = async () => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/chaos/roulette`, { method: 'POST' });
+      await fetchState();
+      setInspectRefreshKey((k) => k + 1);
+      setLightningTrigger((k) => k + 1);
+      playThunderStrike(weatherEnabled);
+      if (res.ok) {
+        const data = await res.json();
+        showToast(
+          `CHAOS ROULETTE: Killed [${data.killed_nodes.join(',')}], corrupted N-${data.corrupted_node_id ?? '—'}, 35% loss!`,
+          '#B5363A'
+        );
+      }
+    } catch (e) {
+      console.error('Chaos roulette failed:', e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 5. Reconstruct
   const handleReconstruct = async () => {
     setIsProcessing(true);
     playTactileClick();
@@ -421,7 +437,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // 6. Self Heal (UNCHANGED API CALL)
+  // 6. Self Heal
   const handleSelfHeal = async () => {
     setIsProcessing(true);
     setSwoopTrigger((k) => k + 1);
@@ -440,6 +456,7 @@ export const App: React.FC = () => {
       });
       if (affectedIndices.length === 0) playHealChime(0, weatherEnabled);
       await fetchState();
+      setInspectRefreshKey((k) => k + 1);
       showToast('Mesh autonomously healed back to 12/12!', '#7A9E7E');
     } catch (e) {
       console.error('Self-healing failed:', e);
@@ -448,7 +465,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // 7. Update Network Impairment (UNCHANGED API CALL)
+  // 7. Update Network Impairment
   const handleUpdateNetwork = async (packet_loss_pct: number, latency_ms: number) => {
     try {
       await fetch(`${API_BASE}/api/chaos/network`, {
@@ -462,24 +479,25 @@ export const App: React.FC = () => {
     }
   };
 
-  // 8. Download Recovered File (UNCHANGED API CALL)
+  // 8. Download Recovered File
   const handleDownload = () => {
     playTactileClick();
     window.open(`${API_BASE}/api/download`, '_blank');
   };
 
-  // 9. Export Benchmark CSV (UNCHANGED API CALL)
+  // 9. Export Benchmark CSV
   const handleExportCsv = () => {
     playTactileClick();
     window.open(`${API_BASE}/api/benchmarks/export`, '_blank');
   };
 
-  // 10. System Reset (UNCHANGED API CALL)
+  // 10. System Reset
   const handleReset = async () => {
     setIsProcessing(true);
     try {
       await fetch(`${API_BASE}/api/system/reset`, { method: 'POST' });
       await fetchState();
+      setInspectRefreshKey((k) => k + 1);
       playTactileClick();
       showToast('System reset to clean 12/12 state.', '#4D8FB8');
     } catch (e) {
@@ -520,8 +538,6 @@ export const App: React.FC = () => {
   const selectedShard = state.manifest?.shards.find(
     (s) => s.node_id === selectedNode?.node_id
   );
-
-  const latestBench = state.benchmarks[state.benchmarks.length - 1];
 
   return (
     <div className="relative min-h-screen">
@@ -567,16 +583,18 @@ export const App: React.FC = () => {
         ))}
       </aside>
 
-      {/* 3D Node Inspector Card (Bottom-Left) */}
-      <InspectorCard
+      {/* Node Inspector Drawer with Live Hex X-Ray */}
+      <NodeDrawer
         node={selectedNode}
         shard={selectedShard}
+        apiBase={API_BASE}
+        refreshTrigger={inspectRefreshKey}
         onClose={() => {
           playTactileClick();
           setSelectedNode(null);
         }}
         onCorruptNode={(id) => handleCorruptShard(id)}
-        onKillSingleNode={() => handleKillNodes(1, false)}
+        onKillNode={(id) => handleKillNodes(1, false, [id])}
         onHealMesh={handleSelfHeal}
       />
 
@@ -737,7 +755,6 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Scroll prompt */}
           <div className="flex items-center justify-between text-xs font-mono-tech text-[#6B6B6B] pt-8 border-t border-[#E8E4DC]/70">
             <span>SCROLL TO WATCH THE HAWK DIVE INTO THE MESH</span>
             <span id="scroll-pct-label">{String(altitudePct).padStart(2, '0')}% ALTITUDE</span>
@@ -840,14 +857,13 @@ export const App: React.FC = () => {
                 />
               </div>
               <p className="text-sm text-[#6B6B6B] max-w-md">
-                Interact with the 12-node ring floating in the 3D scene. Upload real files, kill up
-                to 4 nodes, or inject physical disk byte corruption to watch the RS(8,4) recovery loop
-                in real time.
+                Interact with the 12-node ring floating in the 3D scene. Upload real images, videos,
+                or binary files, trigger Chaos Roulette, and inspect live disk hex dumps.
               </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Left Column: File Upload + Chaos & Healing Controls */}
+              {/* Left Column: File Upload + ChaosConsole */}
               <div className="lg:col-span-5 space-y-6">
                 {/* Real File Ingestion & Recovery Card */}
                 <div className="editorial-card rounded-2xl p-6 space-y-4 reveal-on-scroll">
@@ -864,7 +880,7 @@ export const App: React.FC = () => {
                   <div className="flex flex-wrap gap-2">
                     <label className="flex-1 min-w-[140px] cursor-pointer px-3.5 py-2.5 rounded-xl bg-[#FAF7F2] hover:bg-[#FFFFFF] border border-dashed border-[#D4D0CA] hover:border-[#4D8FB8] text-xs font-medium text-[#1A1A1A] transition-all flex items-center justify-center gap-2">
                       <UploadCloud className="w-3.5 h-3.5 text-[#4D8FB8]" />
-                      <span>{isUploading ? 'Encoding...' : 'Choose File'}</span>
+                      <span>{isUploading ? 'Encoding...' : 'Choose File / Media'}</span>
                       <input
                         type="file"
                         className="hidden"
@@ -931,171 +947,33 @@ export const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Chaos & Healing Controls Card (Exact reference HTML layout) */}
-                <div className="editorial-card rounded-2xl p-6 sm:p-7 space-y-5 reveal-on-scroll">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2">
-                      <Sliders className="w-4 h-4 text-[#4D8FB8]" />
-                      <span>Chaos &amp; Healing Controls</span>
-                    </h3>
-                    <span
-                      id="lab-shard-counter"
-                      className="font-mono-tech text-xs px-2.5 py-1 rounded-full border"
-                      style={{
-                        backgroundColor:
-                          offlineCount > 4 ? '#FAEAEA' : offlineCount > 0 ? '#FBF2E8' : '#EAF2EA',
-                        color:
-                          offlineCount > 4 ? '#B5363A' : offlineCount > 0 ? '#C8853A' : '#7A9E7E',
-                        borderColor:
-                          offlineCount > 4 ? '#E8AAAC' : offlineCount > 0 ? '#E8C89A' : '#B4CDB6',
-                      }}
-                    >
-                      {activeCount} / 12 Shards
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      id="btn-kill-2"
-                      type="button"
-                      onClick={() => handleKillNodes(2, false)}
-                      disabled={isProcessing || activeCount <= 8}
-                      className="px-4 py-3 rounded-xl bg-[#FAEAEA] hover:bg-[#F5D8D8] border border-[#E8AAAC] text-[#B5363A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
-                    >
-                      <ZapOff className="w-4 h-4" />
-                      <span>Kill 2 Nodes</span>
-                    </button>
-                    <button
-                      id="btn-kill-4"
-                      type="button"
-                      onClick={() => handleKillNodes(4, false)}
-                      disabled={isProcessing || activeCount < 12}
-                      className="px-4 py-3 rounded-xl bg-[#FAEAEA] hover:bg-[#F5D8D8] border border-[#E8AAAC] text-[#B5363A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
-                    >
-                      <Skull className="w-4 h-4" />
-                      <span>Kill 4 Nodes (Max)</span>
-                    </button>
-                    <button
-                      id="btn-corrupt-bit"
-                      type="button"
-                      onClick={() => {
-                        const online = state.nodes.filter((n) => n.status === 'Online');
-                        const target = online.length
-                          ? online[Math.floor(Math.random() * online.length)]
-                          : state.nodes[0];
-                        if (target) handleCorruptShard(target.node_id);
-                      }}
-                      disabled={isProcessing}
-                      className="px-4 py-3 rounded-xl bg-[#FBF2E8] hover:bg-[#F5E4CF] border border-[#E8C89A] text-[#C8853A] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
-                    >
-                      <ShieldAlert className="w-4 h-4" />
-                      <span>Bit-Rot (Blake3)</span>
-                    </button>
-                    <button
-                      id="btn-heal-mesh"
-                      type="button"
-                      onClick={handleSelfHeal}
-                      disabled={isProcessing}
-                      className="px-4 py-3 rounded-xl bg-[#EAF2EA] hover:bg-[#DCEAD8] border border-[#B4CDB6] text-[#7A9E7E] text-sm font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-45"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>Auto-Heal to 12/12</span>
-                    </button>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#E8E4DC] flex items-center justify-between gap-4">
-                    <div className="text-xs text-[#6B6B6B]">
-                      Packet Loss Sim:{' '}
-                      <span className="font-mono-tech font-medium text-[#1A1A1A]">
-                        {state.impairment.packet_loss_pct}%
-                      </span>
-                    </div>
-                    <input
-                      id="packet-loss-slider"
-                      type="range"
-                      min="0"
-                      max="40"
-                      step="5"
-                      value={state.impairment.packet_loss_pct}
-                      onChange={(e) =>
-                        handleUpdateNetwork(Number(e.target.value), state.impairment.latency_ms)
-                      }
-                      className="w-36 accent-[#4D8FB8] cursor-pointer"
-                    />
-                    <button
-                      id="btn-reset-mesh"
-                      type="button"
-                      onClick={handleReset}
-                      className="text-xs font-mono-tech uppercase tracking-wider text-[#6B6B6B] hover:text-[#1A1A1A] underline"
-                    >
-                      Reset
-                    </button>
-                  </div>
-
-                  {/* Live Fountain-Droplet Packet Stream Canvas */}
-                  <DropletCanvas
-                    packetLossPct={state.impairment.packet_loss_pct}
-                    dropletStats={dropletStats}
-                  />
-
-                  {/* Live Event Log */}
-                  <div className="bg-[#F5F0E8] border border-[#E8E4DC] rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-mono-tech uppercase tracking-wider text-[#6B6B6B]">
-                        War-Room Event Stream
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setLogs([])}
-                        className="text-[10px] font-mono-tech text-[#6B6B6B] hover:text-[#1A1A1A] underline"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div
-                      id="event-log"
-                      className="space-y-1.5 text-xs font-mono-tech text-[#2D2D2D] max-h-36 overflow-y-auto"
-                    >
-                      {logs.length === 0 ? (
-                        <div>
-                          <span style={{ color: '#7A9E7E', fontWeight: 600 }}>[OK]</span> 12/12 nodes
-                          ready for RS(8,4) distribution.
-                        </div>
-                      ) : (
-                        logs.slice(0, 12).map((log) => {
-                          const lvl = log.level.toUpperCase();
-                          const tagColor =
-                            lvl === 'ERROR'
-                              ? '#B5363A'
-                              : lvl === 'WARN'
-                              ? '#C8853A'
-                              : lvl === 'SUCCESS'
-                              ? '#7A9E7E'
-                              : '#4D8FB8';
-                          return (
-                            <div key={log.id}>
-                              <span style={{ color: tagColor, fontWeight: 600 }}>
-                                [{log.code || lvl}]
-                              </span>{' '}
-                              {log.message}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* Modular ChaosConsole with Judge Chaos Roulette */}
+                <ChaosConsole
+                  nodes={state.nodes}
+                  onKillNodes={(count, random) => handleKillNodes(count, random)}
+                  onCorruptShard={handleCorruptShard}
+                  onChaosRoulette={handleChaosRoulette}
+                  onSelfHeal={handleSelfHeal}
+                  onUpdateNetwork={handleUpdateNetwork}
+                  onReset={handleReset}
+                  currentLossPct={state.impairment.packet_loss_pct}
+                  currentLatencyMs={state.impairment.latency_ms}
+                  dropletStats={dropletStats}
+                  activeNodes={state.active_nodes}
+                  isProcessing={isProcessing}
+                  logs={logs}
+                  onClearLogs={() => setLogs([])}
+                />
               </div>
 
-              {/* Right Column: 12-Node Status Grid + Live Shard Matrix + Integrity Monitor */}
+              {/* Right Column: 12-Node Ring Status + Shard Matrix + IntegrityMonitor (with Media Preview) */}
               <div className="lg:col-span-7 space-y-6">
                 <div className="editorial-card rounded-2xl p-6 sm:p-7 reveal-on-scroll">
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                     <div>
                       <h3 className="font-semibold text-[#1A1A1A]">12-Node Ring Status</h3>
                       <p className="text-xs text-[#6B6B6B]">
-                        Click any individual node to inspect its hardware telemetry, Blake3 hash, or
-                        toggle faults.
+                        Click any node to open the Live Disk &amp; Hex X-Ray Inspector drawer.
                       </p>
                     </div>
                     <div className="flex items-center gap-3 text-xs">
@@ -1151,7 +1029,7 @@ export const App: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Live Shard Matrix Bar (8 Data + 4 Parity) */}
+                  {/* Live Shard Matrix Bar */}
                   <div className="mt-5 pt-4 border-t border-[#E8E4DC]">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
                       <span className="text-xs font-mono-tech uppercase tracking-wider text-[#6B6B6B]">
@@ -1212,57 +1090,18 @@ export const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Blake3 Cryptographic Verification Banner Card */}
-                <div className="editorial-card rounded-2xl p-6 space-y-3 reveal-on-scroll">
-                  <div className="flex items-center justify-between border-b border-[#E8E4DC] pb-3">
-                    <span className="font-semibold text-sm text-[#1A1A1A]">
-                      Blake3 Cryptographic Reconstruction Audit
-                    </span>
-                    {state.integrity_verified === true ? (
-                      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-[#EAF2EA] text-[#7A9E7E] border border-[#B4CDB6] flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Bit-Exact Match
-                      </span>
-                    ) : state.integrity_verified === false ? (
-                      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-[#FAEAEA] text-[#B5363A] border border-[#E8AAAC] flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Hash Mismatch
-                      </span>
-                    ) : (
-                      <span className="text-xs font-mono-tech text-[#6B6B6B]">Standby</span>
-                    )}
-                  </div>
-
-                  {rejectedShardAlert && (
-                    <div className="bg-[#FAEAEA] border border-[#E8AAAC] rounded-xl p-3 text-xs text-[#B5363A]">
-                      <strong>Corrupted Shard Rejected:</strong> {rejectedShardAlert}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono-tech">
-                    <div className="bg-[#F5F0E8] border border-[#E8E4DC] rounded-xl p-3">
-                      <div className="text-[10px] text-[#6B6B6B] uppercase mb-1">Original Digest</div>
-                      <div className="text-[#1A1A1A] truncate" title={state.manifest?.original_blake3}>
-                        {state.manifest?.original_blake3 || '— Pending ingestion —'}
-                      </div>
-                    </div>
-                    <div className="bg-[#F5F0E8] border border-[#E8E4DC] rounded-xl p-3">
-                      <div className="text-[10px] text-[#6B6B6B] uppercase mb-1">Reconstructed Digest</div>
-                      <div
-                        className="truncate"
-                        style={{
-                          color:
-                            state.integrity_verified === true
-                              ? '#7A9E7E'
-                              : state.integrity_verified === false
-                              ? '#B5363A'
-                              : '#6B6B6B',
-                        }}
-                        title={state.reconstructed_blake3 || undefined}
-                      >
-                        {state.reconstructed_blake3 || '— Trigger reconstruction —'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {/* Modular IntegrityMonitor with In-Browser Media Preview */}
+                <IntegrityMonitor
+                  originalHash={state.manifest?.original_blake3 || null}
+                  reconstructedHash={state.reconstructed_blake3}
+                  matched={state.integrity_verified}
+                  canDownload={state.can_download}
+                  filename={state.manifest?.filename || null}
+                  apiBase={API_BASE}
+                  reconstructionMs={lastRecoveryMs}
+                  healingMs={state.benchmarks[state.benchmarks.length - 1]?.healing_ms || 0}
+                  rejectedShardAlert={rejectedShardAlert}
+                />
               </div>
             </div>
           </div>
@@ -1311,7 +1150,7 @@ export const App: React.FC = () => {
               <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">XOR LT Fountain Droplets</h3>
               <p className="text-sm text-[#2D2D2D] leading-relaxed">
                 Simulates harsh 20–40% packet-loss channels using lightweight XOR fountain-droplet
-                encoding and an Axum REST/WebSocket gateway.
+                encoding and multi-laptop LAN HTTP workers.
               </p>
             </div>
 
@@ -1322,127 +1161,23 @@ export const App: React.FC = () => {
               <div className="text-xs font-mono-tech text-[#C8907A] mb-2">04 &middot; OBSERVABILITY</div>
               <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">War-Room &amp; Chaos</h3>
               <p className="text-sm text-[#2D2D2D] leading-relaxed">
-                Real-time React + Three.js UI with Chaos Monkey node-kill injection, 5-metric
-                benchmarking, and 1-click full system reset.
+                Real-time React + Three.js UI with Judge Chaos Roulette, Live Disk Hex X-Ray, and
+                1-click full system reset.
               </p>
             </div>
           </div>
         </section>
 
-        {/* SECTION 5: 5-METRIC BENCHMARKING & TEAM */}
+        {/* SECTION 5: 5-METRIC BENCHMARKING & SCALE CALCULATOR */}
         <section
           id="benchmarks"
           className="py-24 sm:py-28 px-5 sm:px-8 bg-[#FAF7F2]/85 border-t border-[#E8E4DC]"
         >
-          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-6 space-y-5 reveal-on-scroll">
-              <span className="text-xs font-mono-tech uppercase tracking-widest text-[#4D8FB8]">
-                04 / 5-Metric Benchmark Suite
-              </span>
-              <RevealWords
-                text="Engineered to win under pressure."
-                className="font-serif-editorial text-4xl sm:text-5xl text-[#1A1A1A]"
-              />
-              <p className="text-sm sm:text-base text-[#2D2D2D] leading-relaxed">
-                Unlike traditional 3× replication (200% overhead), NIGHTHAWK delivers higher fault
-                tolerance at half the storage cost — backed by real Rust Galois Field benchmarks from
-                Team StrawHats.
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-                <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E8E4DC]">
-                  <div className="text-2xl font-serif-editorial text-[#1A1A1A]">
-                    {countupVals.overhead}
-                  </div>
-                  <div className="text-xs text-[#6B6B6B]">Storage Overhead</div>
-                </div>
-                <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E8E4DC]">
-                  <div className="text-2xl font-serif-editorial text-[#7A9E7E]">
-                    {countupVals.survival}
-                  </div>
-                  <div className="text-xs text-[#6B6B6B]">4-Node Survival</div>
-                </div>
-                <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E8E4DC]">
-                  <div className="text-2xl font-serif-editorial text-[#4D8FB8]">
-                    {countupVals.loss}
-                  </div>
-                  <div className="text-xs text-[#6B6B6B]">Packet Loss Tolerance</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Comparison Card + Live CSV Export */}
-            <div className="lg:col-span-6 editorial-card rounded-2xl p-6 sm:p-8 space-y-5 reveal-on-scroll">
-              <div className="flex items-center justify-between border-b border-[#E8E4DC] pb-3">
-                <span className="font-semibold text-[#1A1A1A]">
-                  Storage &amp; Resilience Comparison
-                </span>
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  className="text-xs font-mono-tech text-[#4D8FB8] hover:text-[#1A1A1A] flex items-center gap-1.5 border border-[#E8E4DC] bg-[#FAF7F2] px-3 py-1 rounded-full transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" /> Export CSV ({state.benchmarks.length} runs)
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-medium text-[#1A1A1A]">
-                      NIGHTHAWK RS(8,4) — 4 Node Failures Tolerated
-                    </span>
-                    <span className="font-mono-tech text-[#4D8FB8]">75 MB total (1.50×)</span>
-                  </div>
-                  <div className="w-full h-2.5 rounded-full bg-[#E8E4DC] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[#7BAFD4] transition-all duration-700"
-                      style={{ width: '50%' }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-medium text-[#6B6B6B]">
-                      Standard 3× Replication — 2 Node Failures Tolerated
-                    </span>
-                    <span className="font-mono-tech text-[#C8907A]">150 MB total (3.00×)</span>
-                  </div>
-                  <div className="w-full h-2.5 rounded-full bg-[#E8E4DC] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[#C8907A] transition-all duration-700"
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {latestBench && (
-                <div className="grid grid-cols-3 gap-2 pt-2 text-xs font-mono-tech">
-                  <div className="bg-[#F5F0E8] p-2.5 rounded-lg border border-[#E8E4DC]">
-                    <div className="text-[10px] text-[#6B6B6B]">Encode</div>
-                    <div className="text-[#1A1A1A] font-semibold">{latestBench.encode_ms} ms</div>
-                  </div>
-                  <div className="bg-[#F5F0E8] p-2.5 rounded-lg border border-[#E8E4DC]">
-                    <div className="text-[10px] text-[#6B6B6B]">Reconstruct</div>
-                    <div className="text-[#4D8FB8] font-semibold">
-                      {latestBench.reconstruction_ms} ms
-                    </div>
-                  </div>
-                  <div className="bg-[#F5F0E8] p-2.5 rounded-lg border border-[#E8E4DC]">
-                    <div className="text-[10px] text-[#6B6B6B]">Heal</div>
-                    <div className="text-[#7A9E7E] font-semibold">{latestBench.healing_ms} ms</div>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-[#E8E4DC] flex flex-wrap items-center justify-between gap-2 text-xs text-[#6B6B6B]">
-                <span>Team StrawHats &middot; IEEE BMSIT&amp;M Winter of Projects 2026</span>
-                <span className="font-mono-tech text-[#1A1A1A]">COMSOC-SW-02</span>
-              </div>
-            </div>
-          </div>
+          <BenchmarkPanel
+            benchmarks={state.benchmarks}
+            onExportCsv={handleExportCsv}
+            countupVals={countupVals}
+          />
         </section>
 
         <footer className="py-10 px-5 sm:px-8 border-t border-[#E8E4DC] bg-[#F5F0E8] text-xs text-[#6B6B6B]">

@@ -9,11 +9,10 @@ use axum::{
     Json, Router,
 };
 use chaos_crypto::{
-    compute_merkle_root, corrupt_shard_file_on_disk, export_benchmarks_csv, hash_bytes,
-    verify_shard,
+    compute_merkle_root, export_benchmarks_csv, hash_bytes, verify_shard,
 };
 use core_codec::{encode_rs84, reconstruct_and_regenerate, DATA_SHARDS, TOTAL_SHARDS};
-use mesh_node::{MeshManager, TOTAL_NODES};
+use mesh_node::{MeshManager, NodeInspectResponse, TOTAL_NODES};
 use serde::{Deserialize, Serialize};
 use shared::{
     BenchmarkRun, FileManifest, NetworkImpairment, NodeStatus, ShardKind, ShardMeta,
@@ -129,6 +128,16 @@ pub struct ReviveResponse {
     pub active_nodes: usize,
 }
 
+#[derive(Serialize)]
+pub struct RouletteResponse {
+    pub status: String,
+    pub killed_nodes: Vec<usize>,
+    pub corrupted_node_id: Option<usize>,
+    pub packet_loss_pct: f64,
+    pub active_nodes: usize,
+    pub redundancy_level: String,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -164,9 +173,11 @@ async fn main() {
         .route("/api/upload", post(handle_upload))
         .route("/api/nodes/{id}/health", get(handle_node_health))
         .route("/api/nodes/{id}/revive", post(handle_node_revive))
+        .route("/api/node/{node_id}/inspect", get(handle_node_inspect))
         .route("/api/chaos/kill", post(handle_chaos_kill))
         .route("/api/chaos/corrupt", post(handle_chaos_corrupt))
         .route("/api/chaos/network", post(handle_chaos_network))
+        .route("/api/chaos/roulette", post(handle_chaos_roulette))
         .route("/api/reconstruct", post(handle_reconstruct))
         .route("/api/heal", post(handle_heal))
         .route("/api/download", get(handle_download))
@@ -182,10 +193,22 @@ async fn main() {
         .await
         .unwrap_or_else(|e| panic!("Failed to bind to {}: {}", bind_addr, e));
 
+    let lan_mode = std::env::var("NIGHTHAWK_NODE_URLS")
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
     println!("============================================================");
     println!("  PROJECT NIGHTHAWK — AXUM GATEWAY READY");
     println!("  Listening on http://{}", bind_addr);
     println!("  Telemetry stream: ws://{}/ws/telemetry", bind_addr);
+    println!(
+        "  Mesh Mode: {}",
+        if lan_mode {
+            "Distributed Multi-Laptop LAN Workers (NIGHTHAWK_NODE_URLS)"
+        } else {
+            "Local Disk Vaults (./data/node_01..12)"
+        }
+    );
     println!("============================================================");
 
     axum::serve(listener, app).await.unwrap();
@@ -451,6 +474,18 @@ async fn handle_chaos_kill(
     })
 }
 
+async fn handle_node_inspect(
+    Path(node_id): Path<usize>,
+    State(app): State<AppState>,
+) -> Result<Json<NodeInspectResponse>, (StatusCode, String)> {
+    let mesh = app.inner.read().await.mesh.clone();
+    let res = mesh
+        .inspect_node(node_id)
+        .await
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
+    Ok(Json(res))
+}
+
 async fn handle_chaos_corrupt(
     State(app): State<AppState>,
     Json(payload): Json<CorruptRequest>,
@@ -458,33 +493,14 @@ async fn handle_chaos_corrupt(
     let node_id = payload.node_id.clamp(1, TOTAL_NODES);
     let shard_id = node_id - 1;
 
-    let shard_path = {
-        let state = app.inner.read().await;
-        state.mesh.shard_file_path(node_id, shard_id)
-    };
+    let mesh = app.inner.read().await.mesh.clone();
+    mesh.corrupt_node_shard(node_id, shard_id)
+        .await
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
 
-    if !shard_path.exists() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            format!("Shard file for node {} does not exist", node_id),
-        ));
-    }
-
-    corrupt_shard_file_on_disk(&shard_path).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Disk corruption failed: {}", e),
-        )
-    })?;
-
-    {
-        let state = app.inner.read().await;
-        state
-            .mesh
-            .mark_node_degraded(node_id)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    }
+    mesh.mark_node_degraded(node_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Mark shard as corrupt in manifest
     {
@@ -499,7 +515,7 @@ async fn handle_chaos_corrupt(
     app.broadcast(TelemetryEvent::NodeStatusChanged {
         node_id,
         status: NodeStatus::Degraded,
-        active_nodes: app.inner.read().await.mesh.get_active_count().await,
+        active_nodes: mesh.get_active_count().await,
     });
 
     app.broadcast(TelemetryEvent::Log {
@@ -517,6 +533,89 @@ async fn handle_chaos_corrupt(
         node_id,
         corrupted_shard_id: shard_id,
         message: "Physical disk shard bytes corrupted with bit rot".to_string(),
+    }))
+}
+
+async fn handle_chaos_roulette(
+    State(app): State<AppState>,
+) -> Result<Json<RouletteResponse>, (StatusCode, String)> {
+    let mesh = app.inner.read().await.mesh.clone();
+
+    // 1. Kill 3 random online nodes
+    let (killed, active) = mesh.kill_nodes(3, true, None).await;
+    for node_id in &killed {
+        app.broadcast(TelemetryEvent::NodeStatusChanged {
+            node_id: *node_id,
+            status: NodeStatus::Offline,
+            active_nodes: active,
+        });
+    }
+
+    // 2. Corrupt 1 surviving online node's shard on disk (total = 4 faults = exact RS(8,4) limit)
+    let nodes = mesh.get_nodes().await;
+    let mut corrupted_node_id: Option<usize> = None;
+
+    if let Some(target_node) = nodes.iter().find(|n| n.status == NodeStatus::Online) {
+        let nid = target_node.node_id;
+        let sid = target_node.shard_id.unwrap_or(nid - 1);
+
+        if mesh.corrupt_node_shard(nid, sid).await.is_ok() {
+            let _ = mesh.mark_node_degraded(nid).await;
+            corrupted_node_id = Some(nid);
+
+            {
+                let mut state = app.inner.write().await;
+                if let Some(manifest) = &mut state.manifest {
+                    if sid < manifest.shards.len() {
+                        manifest.shards[sid].is_corrupt = true;
+                    }
+                }
+            }
+
+            app.broadcast(TelemetryEvent::NodeStatusChanged {
+                node_id: nid,
+                status: NodeStatus::Degraded,
+                active_nodes: active,
+            });
+        }
+    }
+
+    // 3. Set packet loss to 35%
+    {
+        let mut state = app.inner.write().await;
+        state.impairment.packet_loss_pct = 35.0;
+    }
+
+    let valid_surviving = active.saturating_sub(if corrupted_node_id.is_some() { 1 } else { 0 });
+
+    app.broadcast(TelemetryEvent::RedundancyDegraded {
+        surviving_shards: valid_surviving,
+        required_shards: DATA_SHARDS,
+    });
+
+    app.broadcast(TelemetryEvent::Log {
+        timestamp: get_iso_timestamp(),
+        level: "WARN".to_string(),
+        code: "CHAOS_ROULETTE".to_string(),
+        message: format!(
+            "JUDGE CHAOS ROULETTE: Killed 3 random nodes ({:?}), corrupted node {:?} on disk, set packet loss to 35.0%. Surviving valid: {}/12",
+            killed, corrupted_node_id, valid_surviving
+        ),
+    });
+
+    let redundancy_level = if valid_surviving >= 8 {
+        format!("Degraded ({}/12 surviving - Minimum 8 required)", valid_surviving)
+    } else {
+        format!("Critical Failure ({}/12 surviving - Redundancy Lost)", valid_surviving)
+    };
+
+    Ok(Json(RouletteResponse {
+        status: "success".to_string(),
+        killed_nodes: killed,
+        corrupted_node_id,
+        packet_loss_pct: 35.0,
+        active_nodes: active,
+        redundancy_level,
     }))
 }
 
@@ -831,6 +930,14 @@ async fn handle_heal(
     {
         let mut state = app.inner.write().await;
         state.last_healing_ms = healing_ms;
+        state.cached_shards = working_shards;
+        if let Some(m) = &mut state.manifest {
+            for shard_id in &regenerated_shards {
+                if *shard_id < m.shards.len() {
+                    m.shards[*shard_id].is_corrupt = false;
+                }
+            }
+        }
     }
 
     Ok(Json(HealResponse {
@@ -847,9 +954,27 @@ async fn handle_download(State(app): State<AppState>) -> Response {
     let state = app.inner.read().await;
     match (&state.reconstructed_bytes, &state.manifest) {
         (Some(bytes), Some(manifest)) => {
+            let lower = manifest.filename.to_lowercase();
+            let content_type = if lower.ends_with(".mp4") {
+                "video/mp4"
+            } else if lower.ends_with(".webm") {
+                "video/webm"
+            } else if lower.ends_with(".png") {
+                "image/png"
+            } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+                "image/jpeg"
+            } else if lower.ends_with(".gif") {
+                "image/gif"
+            } else if lower.ends_with(".webp") {
+                "image/webp"
+            } else if lower.ends_with(".svg") {
+                "image/svg+xml"
+            } else {
+                "application/octet-stream"
+            };
             let filename = format!("attachment; filename=\"{}\"", manifest.filename);
             let headers = [
-                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CONTENT_TYPE, content_type),
                 (header::CONTENT_DISPOSITION, &filename),
             ];
             (StatusCode::OK, headers, bytes.clone()).into_response()
